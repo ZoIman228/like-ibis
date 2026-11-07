@@ -1109,10 +1109,23 @@ button:disabled {
         height: 29px;
         padding: 0 8px;
         font-size: 9px;
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
+    /* Keep the project-open action available in portrait Android WebView too. */
     .top-button#openProjectBtn {
-        display: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .top-actions {
+        flex: 0 0 auto;
+        min-width: 0;
+        flex-wrap: nowrap;
     }
 
     .workspace {
