@@ -1,0 +1,57 @@
+name: Build PXL Studio Windows Portable
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'index.html'
+      - 'paint.css'
+      - 'paint.js'
+      - 'windows/**'
+      - '.github/workflows/build-windows-portable.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Prepare embedded web app
+        shell: pwsh
+        run: |
+          $web = Join-Path $env:GITHUB_WORKSPACE 'windows/www'
+          New-Item -ItemType Directory -Force -Path $web | Out-Null
+          foreach ($file in @('index.html', 'paint.css', 'paint.js')) {
+            $source = Join-Path $env:GITHUB_WORKSPACE $file
+            if (!(Test-Path $source)) { throw "Missing required web file: $file" }
+            Copy-Item $source (Join-Path $web $file) -Force
+          }
+
+      - name: Publish single-file portable EXE
+        shell: pwsh
+        run: |
+          dotnet publish windows/PXLStudio.Desktop.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            --output dist
+
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v7
+        with:
+          name: PXL-Studio-Portable-Windows-x64
+          path: dist/PXL-Studio.exe
+          if-no-files-found: error
+          retention-days: 30
