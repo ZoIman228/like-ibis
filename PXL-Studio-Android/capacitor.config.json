@@ -1,0 +1,9 @@
+{
+  "appId": "com.zoiman228.pxlstudio",
+  "appName": "PXL Studio",
+  "webDir": "www",
+  "backgroundColor": "#11131b",
+  "android": {
+    "allowMixedContent": false
+  }
+}
