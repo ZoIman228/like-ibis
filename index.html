@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#16171c">
+  <meta name="description" content="PXL Studio — мобільна браузерна студія малювання з шарами та пензлями.">
+  <title>PXL Studio — малюй своє</title>
+  <link rel="stylesheet" href="paint.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="PXL Studio">
+      <span class="brand-mark">P</span>
+      <span class="brand-copy"><strong>PXL Studio</strong><small>creative canvas</small></span>
+    </a>
+    <div class="document-title"><span class="status-dot"></span><span id="documentStatus">Нова робота</span></div>
+    <div class="top-actions">
+      <button class="top-icon" id="undoBtn" title="Скасувати · Ctrl+Z" aria-label="Скасувати" disabled>↶</button>
+      <button class="top-icon" id="redoBtn" title="Повторити · Ctrl+Y" aria-label="Повторити" disabled>↷</button>
+      <span class="top-separator"></span>
+      <button class="top-button subtle" id="openProjectBtn">Відкрити</button>
+      <button class="top-button subtle" id="saveProjectBtn">Проєкт</button>
+      <button class="top-button primary" id="exportBtn">Експорт PNG</button>
+      <input id="projectFile" type="file" accept=".pxl,application/json" hidden>
+      <input id="imageFile" type="file" accept="image/*" hidden>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <nav class="tool-rail" aria-label="Інструменти">
+      <div class="rail-label">TOOLS</div>
+      <button class="rail-tool active" data-tool="brush" title="Пензель (B)"><span>✎</span><small>Пензель</small></button>
+      <button class="rail-tool" data-tool="eraser" title="Гумка (E)"><span>⌫</span><small>Гумка</small></button>
+      <button class="rail-tool" data-tool="eyedropper" title="Піпетка (I)"><span>◉</span><small>Піпетка</small></button>
+      <button class="rail-tool" data-tool="fill" title="Заливка (G)"><span>▨</span><small>Заливка</small></button>
+      <div class="rail-divider"></div>
+      <button class="rail-tool" data-tool="line" title="Лінія"><span>╱</span><small>Лінія</small></button>
+      <button class="rail-tool" data-tool="rect" title="Прямокутник"><span>▱</span><small>Фігура</small></button>
+      <button class="rail-tool" data-tool="ellipse" title="Еліпс"><span>◯</span><small>Еліпс</small></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-tool" id="addImageBtn" title="Імпортувати зображення"><span>▧</span><small>Імпорт</small></button>
+    </nav>
+
+    <section class="editor" aria-label="Робоче полотно">
+      <div class="editor-head">
+        <div><div class="eyebrow">CANVAS / 01</div><strong>Без назви</strong></div>
+        <div class="canvas-readout"><span id="canvasDimensions">1200 × 900 px</span><i></i><span id="canvasStatus">Готово до малювання</span></div>
+      </div>
+      <div class="stage" id="stage">
+        <div class="sheet-wrap" id="sheetWrap"><div class="layer-stack" id="layerStack"></div><canvas id="previewCanvas"></canvas></div>
+        <div class="empty-hint" id="emptyHint"><span class="hint-icon">✦</span><b>Тут починається твоя робота</b><small>Обери пензель і зроби перший штрих</small></div>
+        <div class="stage-tools">
+          <button id="viewRotateLeft" title="Повернути вигляд ліворуч">↶</button>
+          <span id="zoomLabel">100%</span>
+          <button id="zoomOut" title="Зменшити масштаб">−</button>
+          <button id="zoomIn" title="Збільшити масштаб">＋</button>
+          <button id="viewReset" title="Скинути вигляд">⤢</button>
+          <button id="viewRotateRight" title="Повернути вигляд праворуч">↷</button>
+        </div>
+        <div class="stage-tip" id="gestureTip">Space + drag · 2 пальці — рух / зум / поворот</div>
+      </div>
+      <div class="editor-foot"><span><kbd>Ctrl</kbd> + <kbd>Z</kbd> скасувати</span><span><kbd>Space</kbd> + перетягування — рух полотна</span><span id="brushReadout">Пензель · 6 px</span></div>
+    </section>
+
+    <aside class="inspector" id="inspector">
+      <div class="inspector-tabs" role="tablist">
+        <button class="inspector-tab active" data-panel="brushPanel">Пензлі</button>
+        <button class="inspector-tab" data-panel="colorPanel">Колір</button>
+        <button class="inspector-tab" data-panel="layersPanel">Шари</button>
+        <button class="inspector-tab" data-panel="canvasPanel">Полотно</button>
+      </div>
+      <section class="panel-body active" id="brushPanel">
+        <div class="panel-heading"><div><b>Набір пензлів</b><small>Обери характер свого штриха</small></div><span class="panel-count">08</span></div>
+        <div class="brush-grid">
+          <button class="brush-preset selected" data-brush="pen"><span class="brush-preview pen"></span><b>Dip Pen</b><small>Чіткий контур</small></button>
+          <button class="brush-preset" data-brush="pencil"><span class="brush-preview pencil"></span><b>Pencil</b><small>Олівцевий</small></button>
+          <button class="brush-preset" data-brush="marker"><span class="brush-preview marker"></span><b>Marker</b><small>Напівпрозорий</small></button>
+          <button class="brush-preset" data-brush="airbrush"><span class="brush-preview airbrush"></span><b>Airbrush</b><small>М'який розпил</small></button>
+          <button class="brush-preset" data-brush="watercolor"><span class="brush-preview watercolor"></span><b>Watercolor</b><small>Акварель</small></button>
+          <button class="brush-preset" data-brush="calligraphy"><span class="brush-preview calligraphy"></span><b>Calligraphy</b><small>Каліграфія</small></button>
+          <button class="brush-preset" data-brush="pixel"><span class="brush-preview pixel"></span><b>Pixel</b><small>Піксельний</small></button>
+          <button class="brush-preset" data-brush="soft"><span class="brush-preview soft"></span><b>Soft</b><small>М'який пензель</small></button>
+        </div>
+        <div class="control-block"><div class="control-title"><label for="brushSize">Розмір</label><output id="brushSizeOut">6 px</output></div><input id="brushSize" type="range" min="1" max="160" value="6"></div>
+        <div class="control-block"><div class="control-title"><label for="brushOpacity">Непрозорість</label><output id="brushOpacityOut">100%</output></div><input id="brushOpacity" type="range" min="1" max="100" value="100"></div>
+        <div class="control-block"><div class="control-title"><label for="brushHardness">Жорсткість</label><output id="brushHardnessOut">80%</output></div><input id="brushHardness" type="range" min="0" max="100" value="80"></div>
+      </section>
+
+      <section class="panel-body" id="colorPanel">
+        <div class="panel-heading"><div><b>Колір і палітра</b><small>Основний колір інструмента</small></div></div>
+        <div class="color-current"><label class="color-picker" for="colorInput"><input id="colorInput" type="color" value="#6757e8"><span></span></label><div><b id="colorName">Electric violet</b><small id="colorHex">#6757E8</small></div><button id="swapColors" title="Поміняти кольори">⇄</button></div>
+        <div class="swatches" id="swatches">
+          <button style="--sw:#171923" data-color="#171923" title="Графіт"></button><button style="--sw:#ffffff" data-color="#ffffff" title="Білий"></button><button style="--sw:#ef476f" data-color="#ef476f" title="Рожевий"></button><button style="--sw:#ff8c42" data-color="#ff8c42" title="Помаранчевий"></button><button style="--sw:#ffd166" data-color="#ffd166" title="Жовтий"></button><button style="--sw:#06d6a0" data-color="#06d6a0" title="М'ятний"></button><button style="--sw:#00b4d8" data-color="#00b4d8" title="Блакитний"></button><button style="--sw:#4d96ff" data-color="#4d96ff" title="Синій"></button><button style="--sw:#6757e8" data-color="#6757e8" title="Фіолетовий"></button><button style="--sw:#b565d9" data-color="#b565d9" title="Лавандовий"></button><button style="--sw:#c77d4a" data-color="#c77d4a" title="Коричневий"></button><button style="--sw:#8d99ae" data-color="#8d99ae" title="Сірий"></button>
+        </div>
+        <div class="control-block"><div class="control-title"><label for="brushSizeColor">Розмір пензля</label><output id="brushSizeOut2">6 px</output></div><input id="brushSizeColor" type="range" min="1" max="160" value="6"></div>
+      </section>
+
+      <section class="panel-body" id="layersPanel">
+        <div class="panel-heading"><div><b>Шари</b><small>Керуй окремими частинами малюнка</small></div><button class="mini-primary" id="addLayerBtn">＋ Додати</button></div>
+        <div class="layer-actions"><button id="duplicateLayerBtn">▣ Дублювати</button><button id="deleteLayerBtn">⌫ Видалити</button></div>
+        <div class="layer-list" id="layerList"></div>
+        <div class="control-block layer-opacity"><div class="control-title"><label for="layerOpacity">Непрозорість шару</label><output id="layerOpacityOut">100%</output></div><input id="layerOpacity" type="range" min="0" max="100" value="100"></div>
+        <div class="layer-actions"><button id="layerUpBtn">↑ Вище</button><button id="layerDownBtn">↓ Нижче</button><button id="renameLayerBtn">✎ Назва</button></div>
+      </section>
+
+      <section class="panel-body" id="canvasPanel">
+        <div class="panel-heading"><div><b>Параметри полотна</b><small>Розмір, орієнтація та трансформації</small></div></div>
+        <div class="size-fields"><label>Ширина<input id="docWidth" type="number" min="64" max="4096" value="1200"></label><span>×</span><label>Висота<input id="docHeight" type="number" min="64" max="4096" value="900"></label></div>
+        <div class="preset-row"><button data-size="square">Квадрат</button><button data-size="portrait">Портрет</button><button data-size="landscape">Альбом</button><button data-size="story">Story</button></div>
+        <button class="wide-action" id="applySizeBtn">Застосувати розмір</button>
+        <div class="panel-divider"></div>
+        <div class="panel-heading compact"><div><b>Орієнтація та вигляд</b><small>Поворот виду не змінює пікселі</small></div></div>
+        <div class="transform-grid"><button id="rotateDocLeft">↶ Повернути вміст 90°</button><button id="rotateDocRight">↷ Повернути вміст 90°</button><button id="flipHorizontal">⇆ Дзеркально X</button><button id="flipVertical">⇅ Дзеркально Y</button><button id="fitView">⌗ Вписати</button><button id="resetView">⤢ Скинути вид</button></div>
+        <button class="wide-action secondary" id="importImageBtn">＋ Додати зображення як шар</button>
+      </section>
+    </aside>
+  </main>
+  <div class="mobile-status"><span id="mobileToolName">Пензель</span><span id="mobileZoom">100%</span><span id="mobileCanvasSize">1200 × 900</span></div>
+  <dialog id="confirmDialog" class="app-dialog"><form method="dialog"><h3 id="dialogTitle">Підтвердження</h3><p id="dialogText">Продовжити?</p><div class="dialog-actions"><button class="top-button subtle" value="cancel">Скасувати</button><button class="top-button primary" id="dialogConfirm" value="ok">Підтвердити</button></div></form></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+<script src="paint.js"></script>
+</body>
+</html>
