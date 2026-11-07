@@ -56,9 +56,9 @@
     const el = $('toast'); el.textContent = message; el.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
   }
-  function makeLayer(name, fill = null) {
+  function makeLayer(name, fill = null, isBackground = false) {
     const canvas = document.createElement('canvas'); canvas.width = docW; canvas.height = docH;
-    const layer = { id: nextLayerId++, name, canvas, visible: true, opacity: 1, locked: false, blend: 'source-over' };
+    const layer = { id: nextLayerId++, name, canvas, visible: true, opacity: 1, locked: false, blend: 'source-over', isBackground };
     if (fill) { const c = canvas.getContext('2d'); c.fillStyle = fill; c.fillRect(0, 0, docW, docH); }
     return layer;
   }
@@ -67,7 +67,7 @@
   function captureState(mode = 'none', targetId = null) {
     return {
       mode, targetId, docW, docH, activeId, nextLayerId, artworkChanged, isDirty,
-      layers: layers.map(l => ({ id:l.id, name:l.name, visible:l.visible, opacity:l.opacity, locked:l.locked, blend:l.blend, canvasRef:l.canvas,
+      layers: layers.map(l => ({ id:l.id, name:l.name, visible:l.visible, opacity:l.opacity, locked:l.locked, blend:l.blend, isBackground:Boolean(l.isBackground), canvasRef:l.canvas,
         image: mode === 'all' || (mode === 'layer' && l.id === targetId) ? cloneCanvas(l.canvas) : null }))
     };
   }
@@ -81,7 +81,7 @@
     docW = state.docW; docH = state.docH; activeId = state.activeId; nextLayerId = state.nextLayerId; artworkChanged = Boolean(state.artworkChanged); isDirty = Boolean(state.isDirty);
     layers = state.layers.map(item => {
       const canvas = item.image || item.canvasRef;
-      return { id:item.id, name:item.name, visible:item.visible, opacity:item.opacity, locked:item.locked, blend:item.blend, canvas };
+      return { id:item.id, name:item.name, visible:item.visible, opacity:item.opacity, locked:item.locked, blend:item.blend, isBackground:Boolean(item.isBackground), canvas };
     });
     preview.width = docW; preview.height = docH; preview.style.width = `${docW}px`; preview.style.height = `${docH}px`;
     strokePoints = []; drawing = false; erasingPreview = false;
@@ -477,7 +477,23 @@
     if (width * height * layers.length > MAX_TOTAL_PIXELS) return toast('Завелике полотно для поточної кількості шарів. Видали кілька шарів або зменш розмір.');
     record('all'); const oldW = docW, oldH = docH; docW = width; docH = height;
     layers.forEach(layer => {
-      const old = layer.canvas, next = document.createElement('canvas'); next.width = docW; next.height = docH; const c = next.getContext('2d');
+      const old = layer.canvas, next = document.createElement('canvas');
+      next.width = docW;
+      next.height = docH;
+      const c = next.getContext('2d');
+
+      // The bottom background layer must cover the whole new document.
+      // Previously only the old bitmap was centered, so enlarging the canvas
+      // left transparent strips around the original white area.
+      if (layer.isBackground) {
+        const oldCtx = old.getContext('2d', { willReadFrequently: true });
+        const corner = oldCtx.getImageData(0, 0, 1, 1).data;
+        c.fillStyle = corner[3] > 0
+          ? `rgba(${corner[0]}, ${corner[1]}, ${corner[2]}, ${corner[3] / 255})`
+          : '#ffffff';
+        c.fillRect(0, 0, docW, docH);
+      }
+
       if (scaleArtwork) c.drawImage(old, 0, 0, oldW, oldH, 0, 0, docW, docH);
       else c.drawImage(old, (docW-oldW)/2, (docH-oldH)/2);
       layer.canvas = next;
@@ -504,7 +520,7 @@
     const out = compositeDocument(); out.toBlob(blob => { if (blob) downloadBlob(blob, 'pxl-studio-artwork.png'); else toast('Не вдалося експортувати PNG'); }, 'image/png');
   }
   function saveProject() {
-    const data = { app:'PXL Studio', version:1, width:docW, height:docH, activeId, layers:layers.map(l => ({id:l.id,name:l.name,visible:l.visible,opacity:l.opacity,locked:l.locked,blend:l.blend,image:l.canvas.toDataURL('image/png')})) };
+    const data = { app:'PXL Studio', version:1, width:docW, height:docH, activeId, layers:layers.map(l => ({id:l.id,name:l.name,visible:l.visible,opacity:l.opacity,locked:l.locked,blend:l.blend,isBackground:Boolean(l.isBackground),image:l.canvas.toDataURL('image/png')})) };
     const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); downloadBlob(blob, 'my-pxl-project.pxl'); isDirty = false; updateStatus('Проєкт збережено'); toast('Проєкт збережено');
   }
   async function openProject(file) {
@@ -513,8 +529,19 @@
       docW = clamp(Number(data.width)||1200,64,4096); docH = clamp(Number(data.height)||900,64,4096);
       if (docW * docH * Math.min(data.layers.length, MAX_LAYERS) > MAX_TOTAL_PIXELS) throw new Error('Проєкт завеликий для безпечного відкриття в браузері');
       layers = [];
-      for (const item of data.layers.slice(0,MAX_LAYERS)) {
-        const image = new Image(); image.src = item.image; await image.decode(); const layer = makeLayer(item.name || 'Шар'); layer.id = Number(item.id) || nextLayerId++; layer.visible = item.visible !== false; layer.opacity = clamp(Number(item.opacity ?? 1),0,1); layer.locked = Boolean(item.locked); layer.blend = item.blend || 'source-over'; layerCtx(layer).drawImage(image,0,0,docW,docH); layers.push(layer); nextLayerId = Math.max(nextLayerId,layer.id+1);
+      for (const [index, item] of data.layers.slice(0,MAX_LAYERS).entries()) {
+        const image = new Image(); image.src = item.image; await image.decode();
+        const layer = makeLayer(item.name || 'Шар');
+        layer.id = Number(item.id) || nextLayerId++;
+        layer.visible = item.visible !== false;
+        layer.opacity = clamp(Number(item.opacity ?? 1),0,1);
+        layer.locked = Boolean(item.locked);
+        layer.blend = item.blend || 'source-over';
+        // Backward compatibility with projects created before the background flag existed.
+        layer.isBackground = item.isBackground === true || (item.isBackground == null && index === 0 && item.name === 'Фон');
+        layerCtx(layer).drawImage(image,0,0,docW,docH);
+        layers.push(layer);
+        nextLayerId = Math.max(nextLayerId,layer.id+1);
       }
       activeId = layers.some(l=>l.id===data.activeId) ? data.activeId : layers[layers.length-1].id;
       preview.width=docW;preview.height=docH;preview.style.width=`${docW}px`;preview.style.height=`${docH}px`;
@@ -668,7 +695,7 @@
   }
 
   function init() {
-    layers=[makeLayer('Фон', '#ffffff'),makeLayer('Шар 1')]; activeId=layers[1].id;
+    layers=[makeLayer('Фон', '#ffffff', true),makeLayer('Шар 1')]; activeId=layers[1].id;
     preview.width=docW;preview.height=docH;preview.style.width=`${docW}px`;preview.style.height=`${docH}px`;
     setColor(foregroundColor); updateBrushControls(); setBrush('pen'); setTool('brush');
     renderLayers(); updateDimensions(); bindEvents();
