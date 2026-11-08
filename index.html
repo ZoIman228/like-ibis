@@ -149,6 +149,19 @@
   <div class="mobile-status"><span id="mobileToolName">Пензель</span><span id="mobileZoom">100%</span><span id="mobileCanvasSize">1200 × 900</span></div>
   <dialog id="confirmDialog" class="app-dialog"><form method="dialog"><h3 id="dialogTitle">Підтвердження</h3><p id="dialogText">Продовжити?</p><div class="dialog-actions"><button class="top-button subtle" value="cancel">Скасувати</button><button class="top-button primary" id="dialogConfirm" value="ok">Підтвердити</button></div></form></dialog>
   <dialog id="textDialog" class="app-dialog text-dialog"><div class="text-dialog-content"><h3>Додати текст</h3><textarea id="textContent" rows="5" maxlength="2000" placeholder="Введи свій текст..."></textarea><div class="dialog-actions"><button class="top-button subtle" id="textCancelBtn" type="button">Скасувати</button><button class="top-button primary" id="textInsertBtn" type="button">Додати на полотно</button></div></div></dialog>
+  <dialog id="updateDialog" class="app-dialog update-dialog" aria-labelledby="updateDialogTitle">
+    <div class="update-dialog-content">
+      <div class="update-kicker">PXL STUDIO · ОНОВЛЕННЯ</div>
+      <h3 id="updateDialogTitle">Братан, є оновлення! 💀</h3>
+      <p class="update-version" id="updateVersion">Доступна нова версія</p>
+      <ul class="update-changelog" id="updateChangelog"></ul>
+      <p class="update-note">APK завантажиться окремо. Щоб завершити оновлення, підтверди встановлення в Android.</p>
+      <div class="dialog-actions">
+        <button class="top-button subtle" id="updateLaterBtn" type="button">Пізніше</button>
+        <button class="top-button primary" id="updateDownloadBtn" type="button">Завантажити</button>
+      </div>
+    </div>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 <script src="paint.js"></script>

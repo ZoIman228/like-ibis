@@ -19,6 +19,14 @@
   const brushHardness = $('brushHardness');
   const MAX_HISTORY = 18;
   const MAX_LAYERS = 100;
+
+  // Keep this in sync with the Android app's Version name in HTML to APK Builder.
+  // The APK uploaded with this source is version 1.1 (versionCode 2).
+  // Set the first updater-enabled build to 1.1.1 / versionCode 3.
+  const PXL_APP_VERSION = '1.1.1';
+  const PXL_RELEASES_API = 'https://api.github.com/repos/ZoIman228/like-ibis/releases/latest';
+  const PXL_APK_ASSET_NAME = 'PXL-Studio.apk';
+  let pendingUpdateUrl = '';
   const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
   const rad = (d) => d * Math.PI / 180;
   const cloneCanvas = (source) => {
@@ -61,6 +69,106 @@
   function toast(message) {
     const el = $('toast'); el.textContent = message; el.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  function versionParts(value) {
+    const cleaned = String(value || '').trim().replace(/^v/i, '').split(/[+-]/, 1)[0];
+    if (!cleaned || !/^\d+(?:\.\d+)*$/.test(cleaned)) return null;
+    return cleaned.split('.').map(part => Number.parseInt(part, 10));
+  }
+
+  function compareVersions(left, right) {
+    const a = versionParts(left);
+    const b = versionParts(right);
+    if (!a || !b) return 0;
+    const length = Math.max(a.length, b.length);
+    for (let i = 0; i < length; i++) {
+      const av = a[i] || 0;
+      const bv = b[i] || 0;
+      if (av > bv) return 1;
+      if (av < bv) return -1;
+    }
+    return 0;
+  }
+
+  function releaseNotesToList(markdown) {
+    return String(markdown || '')
+      .split(/\\r?\\n/)
+      .map(line => line.trim())
+      .filter(line => line && !/^#{1,6}\s/.test(line))
+      .map(line => line.replace(/^[-*+]\s+/, '').replace(/^\d+[.)]\s+/, '').replace(/`/g, '').trim())
+      .filter(Boolean)
+      .slice(0, 7);
+  }
+
+  function showUpdateDialog(release, version, downloadUrl) {
+    const dialog = $('updateDialog');
+    if (!dialog || typeof dialog.showModal !== 'function') return;
+    pendingUpdateUrl = downloadUrl;
+    $('updateVersion').textContent = `Доступна версія ${version} · зараз ${PXL_APP_VERSION}`;
+    const list = $('updateChangelog');
+    list.replaceChildren();
+    const notes = releaseNotesToList(release.body);
+    (notes.length ? notes : ['Покращення та виправлення помилок.']).forEach(note => {
+      const item = document.createElement('li');
+      item.textContent = note.slice(0, 240);
+      list.appendChild(item);
+    });
+    if (!dialog.open) dialog.showModal();
+  }
+
+  async function checkForUpdates() {
+    // Only show the APK updater on Android; desktop and ordinary browser users
+    // continue using the web version without an APK-download popup.
+    if (!/Android/i.test(navigator.userAgent || '') || !navigator.onLine || typeof fetch !== 'function') return;
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 9000) : null;
+    try {
+      const response = await fetch(PXL_RELEASES_API, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        },
+        ...(controller ? { signal: controller.signal } : {})
+      });
+      if (!response.ok) return; // No release yet, rate limit, or temporary GitHub error.
+      const release = await response.json();
+      if (!release || release.draft || release.prerelease || !release.tag_name) return;
+      if (compareVersions(release.tag_name, PXL_APP_VERSION) <= 0) return;
+
+      const assets = Array.isArray(release.assets) ? release.assets : [];
+      const apkAsset = assets.find(asset => String(asset.name || '').toLowerCase() === PXL_APK_ASSET_NAME.toLowerCase())
+        || assets.find(asset => /\.apk$/i.test(String(asset.name || '')));
+      const downloadUrl = apkAsset && apkAsset.browser_download_url
+        ? apkAsset.browser_download_url
+        : release.html_url;
+      if (!downloadUrl) return;
+      showUpdateDialog(release, release.tag_name, downloadUrl);
+    } catch (error) {
+      // An update check must never block drawing, especially when offline.
+      console.info('PXL Studio: update check skipped', error && error.message ? error.message : error);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  function openUpdateDownload() {
+    if (!pendingUpdateUrl) return;
+    const url = pendingUpdateUrl;
+    // HTML to APK Builder supports WebView popups/download interception.
+    const opened = window.open(url, '_blank');
+    if (!opened) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
   }
   function makeLayer(name, fill = null, isBackground = false) {
     const canvas = document.createElement('canvas'); canvas.width = docW; canvas.height = docH;
@@ -956,6 +1064,8 @@
     $('textCancelBtn').addEventListener('click',()=>{$('textDialog').close();pendingTextPoint=null;});
     $('textInsertBtn').addEventListener('click',()=>{const point=pendingTextPoint,value=$('textContent').value;$('textDialog').close();pendingTextPoint=null;if(point)insertTextAt(point,value);});
     $('textContent').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('textInsertBtn').click();}});
+    $('updateLaterBtn').addEventListener('click',()=>{if($('updateDialog').open)$('updateDialog').close();});
+    $('updateDownloadBtn').addEventListener('click',openUpdateDownload);
     $('swapColors').addEventListener('click',()=>{const a=foregroundColor;setColor(backgroundColor);backgroundColor=a;});
     brushSize.addEventListener('input', () => updateBrushControls(true));
     $('brushSizeColor').addEventListener('input', () => { brushSize.value = $('brushSizeColor').value; updateBrushControls(true); });
@@ -1040,4 +1150,6 @@
     hideBrushCursor();
   }
   init();
+  // Check shortly after the UI is ready so startup remains responsive.
+  setTimeout(checkForUpdates, 1200);
 })();

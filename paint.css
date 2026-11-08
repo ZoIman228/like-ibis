@@ -1541,3 +1541,75 @@ button:disabled {
     line-height: 1.5;
 }
 .text-dialog-content textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+
+/* GitHub release update dialog */
+.update-dialog {
+    width: min(410px, calc(100vw - 28px));
+}
+
+.update-dialog-content {
+    padding: 23px;
+}
+
+.update-kicker {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 5px 8px;
+    border: 1px solid #6559a8;
+    border-radius: 6px;
+    background: #302b49;
+    color: #c8beff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.1px;
+}
+
+.update-dialog h3 {
+    margin: 0 0 7px;
+    font-size: 18px;
+    line-height: 1.3;
+}
+
+.update-dialog .update-version {
+    margin: 0;
+    color: #b9b6cb;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.update-changelog {
+    display: grid;
+    gap: 7px;
+    margin: 15px 0 0;
+    padding: 0 0 0 18px;
+    color: #deddea;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.update-changelog:empty {
+    display: none;
+}
+
+.update-note {
+    margin: 14px 0 0 !important;
+    color: #9294a4 !important;
+    font-size: 10px !important;
+    line-height: 1.55 !important;
+}
+
+.update-dialog .dialog-actions {
+    margin-top: 19px;
+}
+
+@media (max-width: 420px) {
+    .update-dialog-content {
+        padding: 19px;
+    }
+
+    .update-dialog h3 {
+        font-size: 16px;
+    }
+}
