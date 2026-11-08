@@ -580,18 +580,75 @@
     const p=stagePoint(center.x,center.y), scale=fitScale*zoom, dx=(gesture.doc.x-docW/2)*scale, dy=(gesture.doc.y-docH/2)*scale;
     panX=p.x-stage.clientWidth/2-(dx*Math.cos(a)-dy*Math.sin(a)); panY=p.y-stage.clientHeight/2-(dx*Math.sin(a)+dy*Math.cos(a)); updateSheetTransform();
   }
+  // Touch state is kept separate from mouse / pen input. If Android or the
+  // WebView drops a pointerup event, the next primary touch starts a clean
+  // session instead of being mistaken for the second finger of a pinch.
+  function resetTouchSession(cancelStroke = true) {
+    if (cancelStroke && drawing) finishStroke(false);
+    pointers.clear();
+    gesture = null;
+    suppressTouchDrawing = false;
+  }
+
+  function endTouchPointer(event, cancelled = false) {
+    const id = event.pointerId;
+    const wasTracked = pointers.has(id);
+    const wasGesture = Boolean(gesture || suppressTouchDrawing);
+
+    if (wasTracked) pointers.delete(id);
+
+    // A cancelled / unexpectedly lost drawing pointer must never commit a
+    // partial stroke. A normal pointerup commits only the finger that began it.
+    if (drawing && activePointer === id) {
+      finishStroke(!cancelled && !wasGesture);
+    }
+
+    if (!wasTracked) return;
+
+    if (wasGesture) {
+      if (pointers.size < 2) gesture = null;
+      // Do not turn the last finger of a pinch into a drawing finger.
+      if (pointers.size === 0) suppressTouchDrawing = false;
+      return;
+    }
+
+    if (pointers.size === 0) {
+      gesture = null;
+      suppressTouchDrawing = false;
+    }
+  }
+
   function pointerDown(event) {
     if (event.target.closest('.stage-tools')) return;
     trackBrushCursor(event);
-    if(event.pointerType==='touch'){
-      pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});
-      if(pointers.size>=2){event.preventDefault();beginGesture();return;}
-      if(!suppressTouchDrawing) startStroke(event);
+
+    if (event.pointerType === 'touch') {
+      event.preventDefault();
+
+      // Per Pointer Events, the first finger in a new touch sequence is
+      // primary. If our map still contains pointers, their up/cancel was lost.
+      if (event.isPrimary && pointers.size > 0) resetTouchSession(true);
+
+      try { stage.setPointerCapture(event.pointerId); } catch (_) {}
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (pointers.size === 1) {
+        if (!suppressTouchDrawing) startStroke(event);
+      } else if (!gesture) {
+        // A second finger starts a pinch. Further fingers do not restart it.
+        beginGesture();
+      }
       return;
     }
-    if(event.button===1 || event.button===2 || (spaceDown && event.button===0)){event.preventDefault();panStartAt(event);return;}
-    if(event.button===0)startStroke(event);
+
+    if (event.button === 1 || event.button === 2 || (spaceDown && event.button === 0)) {
+      event.preventDefault();
+      panStartAt(event);
+      return;
+    }
+    if (event.button === 0) startStroke(event);
   }
+
   function pointerMove(event) {
     if (panning && event.pointerId === panPointer) {
       hideBrushCursor();
@@ -601,27 +658,76 @@
       event.preventDefault();
       return;
     }
-    if (event.pointerType === 'touch' && pointers.has(event.pointerId)) {
+
+    if (event.pointerType === 'touch') {
+      // Ignore touch moves that do not belong to the current active session.
+      if (!pointers.has(event.pointerId)) return;
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
       if (pointers.size >= 2) {
         hideBrushCursor();
         moveGesture();
         event.preventDefault();
         return;
       }
+      // After pinch, the remaining finger may not resume drawing.
       if (suppressTouchDrawing) return;
     }
+
     trackBrushCursor(event);
     moveStroke(event);
   }
+
   function pointerUp(event) {
-    if(panning && event.pointerId===panPointer){panning=false;panPointer=null;panStart=null;return;}
-    if(event.pointerType==='touch' && pointers.has(event.pointerId)){
-      pointers.delete(event.pointerId);
-      if(gesture){if(pointers.size<2){gesture=null;if(pointers.size===0)suppressTouchDrawing=false;}return;}
-      if(suppressTouchDrawing && pointers.size===0){suppressTouchDrawing=false;return;}
+    if (panning && event.pointerId === panPointer) {
+      panning = false;
+      panPointer = null;
+      panStart = null;
+      return;
     }
-    finishStroke(true);
+    if (event.pointerType === 'touch') {
+      endTouchPointer(event, false);
+      return;
+    }
+    if (drawing && activePointer === event.pointerId) finishStroke(true);
+  }
+
+  function pointerCancel(event) {
+    if (panning && event.pointerId === panPointer) {
+      panning = false;
+      panPointer = null;
+      panStart = null;
+    }
+    if (event.pointerType === 'touch') {
+      endTouchPointer(event, true);
+      return;
+    }
+    if (drawing && activePointer === event.pointerId) finishStroke(false);
+  }
+
+  function pointerCaptureLost(event) {
+    // pointerup normally removes the pointer first, so this is only a fallback
+    // for browsers that unexpectedly release capture while a contact is live.
+    if (panning && event.pointerId === panPointer) {
+      panning = false;
+      panPointer = null;
+      panStart = null;
+    }
+    if (pointers.has(event.pointerId) || (drawing && activePointer === event.pointerId)) {
+      endTouchPointer(event, true);
+    } else if (drawing && activePointer === event.pointerId) {
+      finishStroke(false);
+    }
+  }
+
+  function cancelAllPointers() {
+    if (drawing) finishStroke(false);
+    pointers.clear();
+    gesture = null;
+    suppressTouchDrawing = false;
+    panning = false;
+    panPointer = null;
+    panStart = null;
   }
 
   function openPanel(id) {
@@ -664,7 +770,8 @@
     stage.addEventListener('pointerdown', pointerDown);
     stage.addEventListener('pointermove', pointerMove);
     stage.addEventListener('pointerup', pointerUp);
-    stage.addEventListener('pointercancel', pointerUp);
+    stage.addEventListener('pointercancel', pointerCancel);
+    stage.addEventListener('lostpointercapture', pointerCaptureLost);
     stage.addEventListener('pointerleave', event => {
       if (event.pointerType !== 'touch' && !drawing) hideBrushCursor();
     });
@@ -690,7 +797,8 @@
       }
     });
     window.addEventListener('keyup',e=>{if(e.code==='Space')spaceDown=false;});
-    window.addEventListener('blur',()=>{spaceDown=false;if(drawing)finishStroke(true);});
+    window.addEventListener('blur',()=>{spaceDown=false;cancelAllPointers();});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelAllPointers();});
     $('dialogConfirm').addEventListener('click',e=>e.preventDefault());
   }
 
