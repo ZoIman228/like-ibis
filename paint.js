@@ -7,6 +7,8 @@
   const layerStack = $('layerStack');
   const preview = $('previewCanvas');
   const pctx = preview.getContext('2d');
+  const overlay = $('overlayCanvas');
+  const octx = overlay.getContext('2d');
   const brushCursor = document.createElement('div');
   brushCursor.className = 'brush-cursor';
   brushCursor.setAttribute('aria-hidden', 'true');
@@ -41,6 +43,11 @@
   let spaceDown = false, panning = false, panPointer = null, panStart = null;
   const pointers = new Map();
   let gesture = null, suppressTouchDrawing = false;
+  let symmetryEnabled = false;
+  let selectionRect = null, selectionDrag = null, floatingSelection = null, selectionClipboard = null;
+  let recentColors = [];
+  let pendingTextPoint = null;
+  const RECENT_COLOR_LIMIT = 12;
   let history = [], redoHistory = [];
   let artworkChanged = false;
   let isDirty = false;
@@ -48,8 +55,8 @@
   let backgroundColor = '#ffffff';
   let foregroundColor = '#6757e8';
 
-  const toolNames = { brush: 'Пензель', eraser: 'Гумка', eyedropper: 'Піпетка', fill: 'Заливка', line: 'Лінія', rect: 'Прямокутник', ellipse: 'Еліпс' };
-  const brushNames = { pen: 'Dip Pen', pencil: 'Pencil', marker: 'Marker', airbrush: 'Airbrush', watercolor: 'Watercolor', calligraphy: 'Calligraphy', pixel: 'Pixel', soft: 'Soft' };
+  const toolNames = { brush: 'Пензель', eraser: 'Гумка', eyedropper: 'Піпетка', fill: 'Заливка', line: 'Лінія', rect: 'Прямокутник', ellipse: 'Еліпс', select: 'Виділення', text: 'Текст' };
+  const brushNames = { pen: 'Dip Pen', pencil: 'Pencil', marker: 'Marker', airbrush: 'Airbrush', watercolor: 'Watercolor', calligraphy: 'Calligraphy', pixel: 'Pixel', soft: 'Soft', chalk: 'Chalk', ink: 'Ink', flat: 'Flat', glow: 'Glow', crayon: 'Crayon', texture: 'Texture' };
   const colorNames = { '#171923':'Графіт', '#ffffff':'Білий', '#ef476f':'Рожевий', '#ff8c42':'Помаранчевий', '#ffd166':'Жовтий', '#06d6a0':'М’ятний', '#00b4d8':'Блакитний', '#4d96ff':'Синій', '#6757e8':'Фіолетовий', '#b565d9':'Лавандовий', '#c77d4a':'Коричневий', '#8d99ae':'Сірий' };
 
   function toast(message) {
@@ -84,7 +91,8 @@
       return { id:item.id, name:item.name, visible:item.visible, opacity:item.opacity, locked:item.locked, blend:item.blend, isBackground:Boolean(item.isBackground), canvas };
     });
     preview.width = docW; preview.height = docH; preview.style.width = `${docW}px`; preview.style.height = `${docH}px`;
-    strokePoints = []; drawing = false; erasingPreview = false;
+    overlay.width = docW; overlay.height = docH; overlay.style.width = `${docW}px`; overlay.style.height = `${docH}px`;
+    strokePoints = []; drawing = false; erasingPreview = false; selectionRect = null; selectionDrag = null; floatingSelection = null;
     $('docWidth').value = docW; $('docHeight').value = docH;
     renderLayers(); updateDimensions(); updateSheetTransform(); updateStatus('Зміни відновлено');
   }
@@ -137,6 +145,7 @@
     });
     if (!layers.some(l => l.id === activeId)) activeId = layers[layers.length - 1]?.id ?? null;
     renderLayerList();
+    drawOverlay(); updateSelectionButtons();
     updateStatus('Полотно готове');
   }
   function renderLayerList() {
@@ -300,6 +309,8 @@
     document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === next));
     $('mobileToolName').textContent = toolNames[next] || next;
     $('canvasStatus').textContent = `${toolNames[next] || next} активний`;
+    if (next === 'select') openPanel('canvasPanel');
+    else if (next === 'text') openPanel('brushPanel');
     renderBrushCursor();
   }
   function setBrush(next) {
@@ -307,11 +318,38 @@
     $('brushReadout').textContent = `${brushNames[next]} · ${brushSize.value} px`;
     renderBrushCursor();
   }
+  function loadRecentColors() {
+    try {
+      const stored = JSON.parse(localStorage.getItem('pxlStudio.recentColors') || '[]');
+      recentColors = Array.isArray(stored) ? stored.filter(v => /^#[0-9a-f]{6}$/i.test(v)).slice(0, RECENT_COLOR_LIMIT) : [];
+    } catch (_) { recentColors = []; }
+    renderRecentColors();
+  }
+  function rememberColor(value) {
+    const normalized = String(value).toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(normalized)) return;
+    recentColors = [normalized, ...recentColors.filter(c => c !== normalized)].slice(0, RECENT_COLOR_LIMIT);
+    try { localStorage.setItem('pxlStudio.recentColors', JSON.stringify(recentColors)); } catch (_) {}
+    renderRecentColors();
+  }
+  function renderRecentColors() {
+    const box = $('recentSwatches'); if (!box) return;
+    box.replaceChildren();
+    $('recentColorsWrap').classList.toggle('hidden', recentColors.length === 0);
+    recentColors.forEach(color => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.style.setProperty('--sw', color); button.dataset.recentColor = color;
+      button.title = color.toUpperCase(); button.setAttribute('aria-label', `Колір ${color}`);
+      button.addEventListener('click', () => setColor(color));
+      box.appendChild(button);
+    });
+  }
   function setColor(value) {
     foregroundColor = value.toLowerCase(); colorInput.value = foregroundColor;
     $('colorHex').textContent = foregroundColor.toUpperCase(); $('colorName').textContent = colorNames[foregroundColor] || 'Власний колір';
     document.querySelector('.color-picker span').style.background = foregroundColor;
     document.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('selected', b.dataset.color.toLowerCase() === foregroundColor));
+    rememberColor(foregroundColor);
   }
   function setRange(input, output, suffix) {
     const v = Number(input.value); output.textContent = `${v}${suffix}`;
@@ -335,7 +373,7 @@
     const factor = (tool === 'line' || tool === 'rect' || tool === 'ellipse') ? 1 : brushOpacityFactor();
     preview.style.opacity = tool === 'eraser' ? '1' : String((Number(brushOpacity.value) / 100) * factor);
   }
-  function drawSegment(from, to) {
+  function drawSegmentSingle(from, to) {
     const size = Number(brushSize.value), color = foregroundColor;
     const distance = Math.hypot(to.x - from.x, to.y - from.y);
     const pressure = clamp(((from.pressure || .5) + (to.pressure || .5)) / 2, .15, 1);
@@ -345,10 +383,30 @@
     if (brush === 'watercolor') width = size * 1.5;
     if (brush === 'soft') width = size * 1.25;
     if (brush === 'calligraphy') { width = Math.max(1, size * .38 * pressure); cap = 'butt'; }
+    if (brush === 'ink') width = Math.max(1, size * (.45 + pressure * .75));
+    if (brush === 'flat') { width = size * 1.15; cap = 'square'; }
     if (brush === 'pixel') {
       const step = Math.max(2, size * .6), count = Math.max(1, Math.ceil(distance / step));
       pctx.save(); pctx.fillStyle = color; pctx.globalAlpha = 1;
       for (let i = 0; i <= count; i++) { const t = i / count, x = from.x + (to.x-from.x)*t, y = from.y + (to.y-from.y)*t; pctx.fillRect(Math.round(x/step)*step, Math.round(y/step)*step, step, step); }
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'chalk' || brush === 'crayon' || brush === 'texture') {
+      const step = Math.max(2, size * (brush === 'texture' ? .22 : .16));
+      const count = Math.max(1, Math.ceil(distance / step));
+      const dots = brush === 'crayon' ? 22 : brush === 'chalk' ? 30 : 16;
+      pctx.save(); pctx.fillStyle = color;
+      for (let i = 0; i <= count; i++) {
+        const t = i / count, cx = from.x + (to.x - from.x) * t, cy = from.y + (to.y - from.y) * t;
+        for (let j = 0; j < dots; j++) {
+          const seed = Math.floor(cx * 13 + cy * 17 + i * 41 + j * 67);
+          const angle = deterministicNoise(seed) * Math.PI * 2;
+          const radius = Math.sqrt(deterministicNoise(seed + 11)) * size * (brush === 'texture' ? .55 : .7);
+          const dot = Math.max(.45, size * (.025 + deterministicNoise(seed + 29) * .055));
+          pctx.globalAlpha = brush === 'chalk' ? .28 : brush === 'crayon' ? .34 : .22;
+          pctx.beginPath(); pctx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, dot, 0, Math.PI * 2); pctx.fill();
+        }
+      }
       pctx.restore(); updatePreviewOpacity(); return;
     }
     if (brush === 'airbrush') {
@@ -371,32 +429,56 @@
     pctx.lineWidth = width; pctx.lineCap = cap; pctx.lineJoin = 'round';
     if (brush === 'watercolor') { pctx.shadowColor = color; pctx.shadowBlur = size * (.25 + (1 - Number(brushHardness.value)/100) * .8); }
     if (brush === 'soft') { pctx.shadowColor = color; pctx.shadowBlur = size * (.15 + (1 - Number(brushHardness.value)/100) * 1.1); }
+    if (brush === 'glow') { pctx.shadowColor = color; pctx.shadowBlur = size * 1.7; }
     pctx.beginPath(); pctx.moveTo(from.x, from.y); pctx.lineTo(to.x, to.y); pctx.stroke();
     if (brush === 'pencil') { pctx.shadowBlur = 0; pctx.lineWidth = Math.max(.5, width * .22); pctx.globalAlpha = .55; pctx.beginPath(); pctx.moveTo(from.x + .4, from.y - .35); pctx.lineTo(to.x + .4, to.y - .35); pctx.stroke(); }
     pctx.restore(); updatePreviewOpacity();
+  }
+  function drawSegment(from, to) {
+    drawSegmentSingle(from, to);
+    if (symmetryEnabled && Math.abs(from.x - docW / 2) > 0.001 && Math.abs(to.x - docW / 2) > 0.001) {
+      drawSegmentSingle({ x: docW - from.x, y: from.y, pressure: from.pressure }, { x: docW - to.x, y: to.y, pressure: to.pressure });
+    }
   }
   function deterministicNoise(seed) { const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
   function renderShapePreview() {
     pctx.clearRect(0, 0, docW, docH);
     if (strokePoints.length < 2) return;
     const first = strokePoints[0], last = strokePoints[strokePoints.length - 1];
-    pctx.save(); pctx.strokeStyle = foregroundColor; pctx.globalAlpha = 1; pctx.lineWidth = Number(brushSize.value); pctx.lineCap = 'round'; pctx.lineJoin = 'round'; pctx.beginPath();
-    if (tool === 'line') { pctx.moveTo(first.x, first.y); pctx.lineTo(last.x, last.y); }
-    else if (tool === 'rect') pctx.rect(first.x, first.y, last.x-first.x, last.y-first.y);
-    else { const cx=(first.x+last.x)/2, cy=(first.y+last.y)/2; pctx.ellipse(cx,cy,Math.max(1,Math.abs(last.x-first.x)/2),Math.max(1,Math.abs(last.y-first.y)/2),0,0,Math.PI*2); }
-    pctx.stroke(); pctx.restore(); updatePreviewOpacity();
+    const drawShape = (mirror = false) => {
+      pctx.save();
+      if (mirror) { pctx.translate(docW, 0); pctx.scale(-1, 1); }
+      pctx.strokeStyle = foregroundColor; pctx.globalAlpha = 1; pctx.lineWidth = Number(brushSize.value); pctx.lineCap = 'round'; pctx.lineJoin = 'round'; pctx.beginPath();
+      if (tool === 'line') { pctx.moveTo(first.x, first.y); pctx.lineTo(last.x, last.y); }
+      else if (tool === 'rect') pctx.rect(first.x, first.y, last.x-first.x, last.y-first.y);
+      else { const cx=(first.x+last.x)/2, cy=(first.y+last.y)/2; pctx.ellipse(cx,cy,Math.max(1,Math.abs(last.x-first.x)/2),Math.max(1,Math.abs(last.y-first.y)/2),0,0,Math.PI*2); }
+      pctx.stroke(); pctx.restore();
+    };
+    drawShape(false); if (symmetryEnabled) drawShape(true); updatePreviewOpacity();
+  }
+  function erasePoint(point, mirror = false) {
+    pctx.save(); if (mirror) { pctx.translate(docW, 0); pctx.scale(-1, 1); }
+    pctx.globalCompositeOperation='destination-out'; pctx.globalAlpha=Number(brushOpacity.value)/100; pctx.fillStyle='#000';
+    pctx.beginPath(); pctx.arc(point.x,point.y,Number(brushSize.value)/2,0,Math.PI*2); pctx.fill(); pctx.restore();
+  }
+  function eraseSegment(from, to, mirror = false) {
+    pctx.save(); if (mirror) { pctx.translate(docW, 0); pctx.scale(-1, 1); }
+    pctx.globalCompositeOperation='destination-out'; pctx.globalAlpha=Number(brushOpacity.value)/100; pctx.strokeStyle='#000'; pctx.lineWidth=Number(brushSize.value); pctx.lineCap='round'; pctx.lineJoin='round';
+    pctx.beginPath(); pctx.moveTo(from.x,from.y); pctx.lineTo(to.x,to.y); pctx.stroke(); pctx.restore();
   }
   function startStroke(event) {
-    const layer = activeLayer(); if (!layer || layer.locked || !layer.visible) { toast('Активний шар заблокований або прихований'); return; }
     const point = screenToDoc(event.clientX, event.clientY);
     if (point.x < 0 || point.y < 0 || point.x > docW || point.y > docH) return;
+    if (tool === 'select') { startSelectionAction(event); return; }
+    if (tool === 'text') { openTextDialog(point); return; }
+    const layer = activeLayer(); if (!layer || layer.locked || !layer.visible) { toast('Активний шар заблокований або прихований'); return; }
     if (tool === 'eyedropper') { pickColor(point); return; }
     if (tool === 'fill') { floodFill(point); return; }
     drawing = true; activePointer = event.pointerId; strokePoints = [{ ...point, pressure: event.pressure || .5 }];
     strokeBefore = captureState('layer', layer.id); history.push(strokeBefore); if (history.length > historyLimit()) history.shift(); redoHistory = []; updateHistoryButtons();
     erasingPreview = tool === 'eraser';
     pctx.setTransform(1,0,0,1,0,0); pctx.clearRect(0,0,docW,docH); preview.style.opacity = '1';
-    if (erasingPreview) { pctx.drawImage(layer.canvas,0,0); layer.canvas.style.visibility = 'hidden'; pctx.save(); pctx.globalCompositeOperation='destination-out'; pctx.globalAlpha=Number(brushOpacity.value)/100; pctx.strokeStyle='#000'; pctx.fillStyle='#000'; pctx.lineWidth=Number(brushSize.value); pctx.lineCap='round'; pctx.lineJoin='round'; pctx.beginPath(); pctx.arc(point.x,point.y,Number(brushSize.value)/2,0,Math.PI*2); pctx.fill(); pctx.restore(); }
+    if (erasingPreview) { pctx.drawImage(layer.canvas,0,0); layer.canvas.style.visibility = 'hidden'; erasePoint(point); if (symmetryEnabled && Math.abs(point.x-docW/2)>.5) erasePoint({x:docW-point.x,y:point.y}); }
     else if (tool === 'line' || tool === 'rect' || tool === 'ellipse') updatePreviewOpacity();
     else drawSegment(point,point);
     try { stage.setPointerCapture(event.pointerId); } catch (_) {}
@@ -410,7 +492,7 @@
     const next = { ...point, pressure: event.pressure || .5 };
     strokePoints.push(next);
     if (tool === 'eraser') {
-      pctx.save(); pctx.globalCompositeOperation='destination-out'; pctx.globalAlpha=Number(brushOpacity.value)/100; pctx.strokeStyle='#000'; pctx.lineWidth=Number(brushSize.value); pctx.lineCap='round'; pctx.lineJoin='round'; pctx.beginPath(); pctx.moveTo(prev.x,prev.y); pctx.lineTo(next.x,next.y); pctx.stroke(); pctx.restore();
+      eraseSegment(prev, next); if (symmetryEnabled && (Math.abs(prev.x-docW/2)>.5 || Math.abs(next.x-docW/2)>.5)) eraseSegment({x:docW-prev.x,y:prev.y},{x:docW-next.x,y:next.y});
     } else if (tool === 'line' || tool === 'rect' || tool === 'ellipse') renderShapePreview();
     else drawSegment(prev,next);
     $('canvasStatus').textContent = tool === 'eraser' ? 'Стираю…' : 'Малюю…';
@@ -433,6 +515,133 @@
     }
     pctx.clearRect(0, 0, docW, docH); preview.style.opacity='1'; drawing = false; activePointer = null; strokePoints = []; strokeBefore = null; erasingPreview = false;
     renderLayers(); updateHistoryButtons(); if (commit) updateStatus('Малюнок оновлено');
+  }
+
+  function openTextDialog(point) {
+    pendingTextPoint = point;
+    $('textContent').value = '';
+    $('textDialog').showModal();
+    $('textContent').focus();
+  }
+  function insertTextAt(point, value) {
+    const layer = activeLayer();
+    if (!layer || layer.locked || !layer.visible) return toast('Активний шар заблокований або прихований');
+    if (!value || !value.trim()) return toast('Введи текст перед додаванням');
+    record('layer', layer.id);
+    const ctx = layerCtx(layer), size = Number($('textSize').value) || 48;
+    const font = $('textFont').value.trim() || 'Arial';
+    ctx.save(); ctx.fillStyle = foregroundColor; ctx.textBaseline = 'top';
+    ctx.font = `${$('textBold').checked ? '700 ' : ''}${size}px ${font}`;
+    const lineHeight = size * 1.25;
+    value.slice(0, 2000).split('\n').slice(0, 50).forEach((line, index) => ctx.fillText(line.slice(0, 300), point.x, point.y + index * lineHeight, Math.max(1, docW - point.x)));
+    ctx.restore(); artworkChanged = true; isDirty = true; renderLayers(); updateStatus('Текст додано'); toast('Текст додано до активного шару');
+  }
+  function normalizedRect(a, b) {
+    const x = clamp(Math.floor(Math.min(a.x,b.x)),0,docW), y = clamp(Math.floor(Math.min(a.y,b.y)),0,docH);
+    const right = clamp(Math.ceil(Math.max(a.x,b.x)),0,docW), bottom = clamp(Math.ceil(Math.max(a.y,b.y)),0,docH);
+    return {x,y,width:Math.max(1,right-x),height:Math.max(1,bottom-y)};
+  }
+  function pointInRect(point, rect) { return Boolean(rect && point.x>=rect.x && point.y>=rect.y && point.x<=rect.x+rect.width && point.y<=rect.y+rect.height); }
+  function drawOverlay() {
+    if (!overlay) return;
+    if (overlay.width !== docW || overlay.height !== docH) { overlay.width=docW; overlay.height=docH; overlay.style.width=`${docW}px`; overlay.style.height=`${docH}px`; }
+    octx.clearRect(0,0,docW,docH);
+    if (floatingSelection) octx.drawImage(floatingSelection.canvas, floatingSelection.x, floatingSelection.y);
+    if (symmetryEnabled) {
+      octx.save(); octx.strokeStyle='rgba(255,218,98,.95)'; octx.lineWidth=Math.max(1,docW/1200); octx.setLineDash([14,10]);
+      octx.beginPath(); octx.moveTo(docW/2,0); octx.lineTo(docW/2,docH); octx.stroke();
+      octx.fillStyle='rgba(255,218,98,.95)'; octx.font=`${Math.max(14,docW/90)}px Arial`; octx.fillText('SYMMETRY',docW/2+8,Math.max(22,docH/35)); octx.restore();
+    }
+    const rect = selectionDrag?.mode === 'new' ? normalizedRect(selectionDrag.start, selectionDrag.current) : selectionRect;
+    if (rect) {
+      octx.save(); octx.lineWidth=Math.max(1,docW/1000); octx.setLineDash([8,5]); octx.strokeStyle='#171923'; octx.strokeRect(rect.x,rect.y,rect.width,rect.height);
+      octx.lineDashOffset=6; octx.strokeStyle='#fff'; octx.strokeRect(rect.x,rect.y,rect.width,rect.height); octx.restore();
+    }
+  }
+  function updateSelectionButtons() {
+    const hasRect = Boolean(selectionRect), hasFloat = Boolean(floatingSelection), hasClipboard = Boolean(selectionClipboard);
+    $('copySelectionBtn').disabled = !hasRect;
+    $('cutSelectionBtn').disabled = !hasRect;
+    $('deleteSelectionBtn').disabled = !hasRect;
+    $('pasteSelectionBtn').disabled = !hasClipboard || hasFloat;
+    $('clearSelectionBtn').disabled = !hasRect && !hasFloat && !selectionDrag;
+  }
+  function startSelectionAction(event) {
+    try { stage.setPointerCapture(event.pointerId); } catch (_) {}
+    const point = screenToDoc(event.clientX,event.clientY);
+    if (point.x<0 || point.y<0 || point.x>docW || point.y>docH) return;
+    const layer = activeLayer(); if (!layer || layer.locked || !layer.visible) return toast('Активний шар заблокований або прихований');
+    if (floatingSelection && pointInRect(point,{x:floatingSelection.x,y:floatingSelection.y,width:floatingSelection.canvas.width,height:floatingSelection.canvas.height})) {
+      selectionDrag={mode:'move-float',pointerId:event.pointerId,offsetX:point.x-floatingSelection.x,offsetY:point.y-floatingSelection.y};
+      return;
+    }
+    if (selectionRect && pointInRect(point,selectionRect)) {
+      record('layer',layer.id);
+      const rect=selectionRect, part=document.createElement('canvas'); part.width=rect.width; part.height=rect.height;
+      part.getContext('2d').drawImage(layer.canvas,rect.x,rect.y,rect.width,rect.height,0,0,rect.width,rect.height);
+      layerCtx(layer).clearRect(rect.x,rect.y,rect.width,rect.height);
+      floatingSelection={canvas:part,x:rect.x,y:rect.y}; selectionRect=null;
+      selectionDrag={mode:'move-float',pointerId:event.pointerId,offsetX:point.x-floatingSelection.x,offsetY:point.y-floatingSelection.y,recorded:true};
+      renderLayers(); drawOverlay(); return;
+    }
+    selectionDrag={mode:'new',pointerId:event.pointerId,start:point,current:point};
+    drawOverlay();
+  }
+  function moveSelectionAction(event) {
+    if (!selectionDrag || selectionDrag.pointerId!==event.pointerId) return false;
+    const point=screenToDoc(event.clientX,event.clientY);
+    if (selectionDrag.mode==='new') selectionDrag.current=point;
+    else if (floatingSelection) { floatingSelection.x=clamp(point.x-selectionDrag.offsetX,0,docW-floatingSelection.canvas.width); floatingSelection.y=clamp(point.y-selectionDrag.offsetY,0,docH-floatingSelection.canvas.height); }
+    drawOverlay(); return true;
+  }
+  function finishSelectionAction(event, cancelled=false) {
+    if (!selectionDrag || selectionDrag.pointerId!==event.pointerId) return false;
+    const drag=selectionDrag; selectionDrag=null;
+    if (drag.mode==='new') {
+      const rect=normalizedRect(drag.start,drag.current);
+      selectionRect=(rect.width>2 && rect.height>2)?rect:null;
+    } else if (floatingSelection) {
+      const layer=activeLayer();
+      if (layer) { layerCtx(layer).drawImage(floatingSelection.canvas,floatingSelection.x,floatingSelection.y); selectionRect={x:floatingSelection.x,y:floatingSelection.y,width:floatingSelection.canvas.width,height:floatingSelection.canvas.height}; artworkChanged=true; isDirty=true; renderLayers(); }
+      floatingSelection=null;
+    }
+    drawOverlay(); updateSelectionButtons();
+    if (!cancelled && drag.mode==='new' && selectionRect) toast('Область виділено');
+    return true;
+  }
+  function copySelection() {
+    if (!selectionRect) return;
+    const layer=activeLayer(); if (!layer) return;
+    const r=selectionRect, copy=document.createElement('canvas'); copy.width=r.width; copy.height=r.height;
+    copy.getContext('2d').drawImage(layer.canvas,r.x,r.y,r.width,r.height,0,0,r.width,r.height);
+    selectionClipboard=copy; updateSelectionButtons(); toast('Виділення скопійовано');
+  }
+  function cutSelection() {
+    if (!selectionRect) return;
+    const layer=activeLayer(); if (!layer || layer.locked) return;
+    copySelection(); record('layer',layer.id); layerCtx(layer).clearRect(selectionRect.x,selectionRect.y,selectionRect.width,selectionRect.height);
+    artworkChanged=true; isDirty=true; renderLayers(); drawOverlay(); toast('Виділення вирізано');
+  }
+  function pasteSelection() {
+    if (!selectionClipboard || floatingSelection) return;
+    const layer=activeLayer(); if (!layer || layer.locked) return toast('Активний шар заблокований');
+    const x=Math.round((docW-selectionClipboard.width)/2), y=Math.round((docH-selectionClipboard.height)/2);
+    record('layer',layer.id); layerCtx(layer).drawImage(selectionClipboard,x,y);
+    selectionRect={x,y,width:selectionClipboard.width,height:selectionClipboard.height};
+    artworkChanged=true; isDirty=true; setTool('select'); openPanel('canvasPanel'); renderLayers(); drawOverlay(); updateSelectionButtons(); toast('Фрагмент вставлено — перетягни рамку, щоб перемістити');
+  }
+  function deleteSelection() {
+    if (!selectionRect) return;
+    const layer=activeLayer(); if (!layer || layer.locked) return;
+    record('layer',layer.id); layerCtx(layer).clearRect(selectionRect.x,selectionRect.y,selectionRect.width,selectionRect.height);
+    selectionRect=null; artworkChanged=true; isDirty=true; renderLayers(); drawOverlay(); updateSelectionButtons(); toast('Виділену область видалено');
+  }
+  function clearSelection() {
+    if (floatingSelection) {
+      const layer=activeLayer(); if (layer) { layerCtx(layer).drawImage(floatingSelection.canvas,floatingSelection.x,floatingSelection.y); artworkChanged=true; isDirty=true; renderLayers(); }
+      floatingSelection=null;
+    }
+    selectionRect=null; selectionDrag=null; drawOverlay(); updateSelectionButtons();
   }
 
   function floodFill(point) {
@@ -499,6 +708,7 @@
       layer.canvas = next;
     });
     preview.width = docW; preview.height = docH; preview.style.width = `${docW}px`; preview.style.height = `${docH}px`;
+    overlay.width = docW; overlay.height = docH; overlay.style.width = `${docW}px`; overlay.style.height = `${docH}px`;
     $('docWidth').value = docW; $('docHeight').value = docH; artworkChanged = true; isDirty = true; renderLayers(); updateDimensions(); resetView(); toast(`Полотно: ${docW} × ${docH}`);
   }
   function transformDocument(kind) {
@@ -511,6 +721,7 @@
     });
     if (kind === 'rotateLeft' || kind === 'rotateRight') [docW,docH] = [docH,docW];
     preview.width = docW; preview.height = docH; preview.style.width = `${docW}px`; preview.style.height = `${docH}px`;
+    overlay.width = docW; overlay.height = docH; overlay.style.width = `${docW}px`; overlay.style.height = `${docH}px`;
     $('docWidth').value = docW; $('docHeight').value = docH; artworkChanged = true; isDirty = true; renderLayers(); updateDimensions(); resetView(); toast('Полотно трансформовано');
   }
   function downloadBlob(blob, filename) {
@@ -545,6 +756,8 @@
       }
       activeId = layers.some(l=>l.id===data.activeId) ? data.activeId : layers[layers.length-1].id;
       preview.width=docW;preview.height=docH;preview.style.width=`${docW}px`;preview.style.height=`${docH}px`;
+      overlay.width=docW;overlay.height=docH;overlay.style.width=`${docW}px`;overlay.style.height=`${docH}px`;
+      selectionRect=null; selectionDrag=null; floatingSelection=null; selectionClipboard=null;
       history=[];redoHistory=[];artworkChanged=true;isDirty=false;renderLayers();updateDimensions();resetView();updateHistoryButtons();updateStatus('Проєкт відкрито');toast('Проєкт відкрито');
     } catch (err) { console.error(err); toast(`Не вдалося відкрити проєкт: ${err.message}`); }
   }
@@ -562,6 +775,7 @@
   function beginGesture() {
     const pts=[...pointers.values()]; if(pts.length<2)return;
     hideBrushCursor();
+    if (selectionDrag) finishSelectionAction({pointerId:selectionDrag.pointerId}, true);
     if(drawing) finishStroke(false);
     const center={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2}; const doc=screenToDoc(center.x,center.y);
     gesture={distance:Math.max(1,Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)),angle:angleBetween(pts[0],pts[1]),zoom,rotation:viewRotation,doc,center};
@@ -674,38 +888,38 @@
       if (suppressTouchDrawing) return;
     }
 
+    if (moveSelectionAction(event)) { event.preventDefault(); return; }
     trackBrushCursor(event);
     moveStroke(event);
   }
 
   function pointerUp(event) {
+    const selectionHandled = finishSelectionAction(event, false);
+    if (event.pointerType === 'touch') { endTouchPointer(event, false); return; }
+    if (selectionHandled) return;
     if (panning && event.pointerId === panPointer) {
       panning = false;
       panPointer = null;
       panStart = null;
-      return;
-    }
-    if (event.pointerType === 'touch') {
-      endTouchPointer(event, false);
       return;
     }
     if (drawing && activePointer === event.pointerId) finishStroke(true);
   }
 
   function pointerCancel(event) {
+    const selectionHandled = finishSelectionAction(event, true);
+    if (event.pointerType === 'touch') { endTouchPointer(event, true); return; }
+    if (selectionHandled) return;
     if (panning && event.pointerId === panPointer) {
       panning = false;
       panPointer = null;
       panStart = null;
     }
-    if (event.pointerType === 'touch') {
-      endTouchPointer(event, true);
-      return;
-    }
     if (drawing && activePointer === event.pointerId) finishStroke(false);
   }
 
   function pointerCaptureLost(event) {
+    if (selectionDrag && selectionDrag.pointerId === event.pointerId) finishSelectionAction(event, true);
     // pointerup normally removes the pointer first, so this is only a fallback
     // for browsers that unexpectedly release capture while a contact is live.
     if (panning && event.pointerId === panPointer) {
@@ -722,6 +936,8 @@
 
   function cancelAllPointers() {
     if (drawing) finishStroke(false);
+    if (selectionDrag) finishSelectionAction({pointerId:selectionDrag.pointerId}, true);
+    selectionDrag = null;
     pointers.clear();
     gesture = null;
     suppressTouchDrawing = false;
@@ -740,6 +956,11 @@
     document.querySelectorAll('.inspector-tab').forEach(b=>b.addEventListener('click',()=>openPanel(b.dataset.panel)));
     document.querySelectorAll('[data-color]').forEach(b=>b.addEventListener('click',()=>setColor(b.dataset.color)));
     colorInput.addEventListener('input',()=>setColor(colorInput.value));
+    $('clearRecentColors').addEventListener('click',()=>{recentColors=[];try{localStorage.removeItem('pxlStudio.recentColors');}catch(_){}renderRecentColors();toast('Історію кольорів очищено');});
+    $('textSize').addEventListener('input',()=>{$('textSizeOut').textContent=`${$('textSize').value} px`;});
+    $('textCancelBtn').addEventListener('click',()=>{$('textDialog').close();pendingTextPoint=null;});
+    $('textInsertBtn').addEventListener('click',()=>{const point=pendingTextPoint,value=$('textContent').value;$('textDialog').close();pendingTextPoint=null;if(point)insertTextAt(point,value);});
+    $('textContent').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('textInsertBtn').click();}});
     $('swapColors').addEventListener('click',()=>{const a=foregroundColor;setColor(backgroundColor);backgroundColor=a;});
     brushSize.addEventListener('input', () => updateBrushControls(true));
     $('brushSizeColor').addEventListener('input', () => { brushSize.value = $('brushSizeColor').value; updateBrushControls(true); });
@@ -762,6 +983,8 @@
     $('applySizeBtn').addEventListener('click',()=>setCanvasSize($('docWidth').value,$('docHeight').value,false));
     $('rotateDocLeft').addEventListener('click',()=>transformDocument('rotateLeft')); $('rotateDocRight').addEventListener('click',()=>transformDocument('rotateRight'));
     $('flipHorizontal').addEventListener('click',()=>transformDocument('flipH')); $('flipVertical').addEventListener('click',()=>transformDocument('flipV'));
+    $('symmetryToggle').addEventListener('click',()=>{symmetryEnabled=!symmetryEnabled;$('symmetryToggle').setAttribute('aria-pressed',String(symmetryEnabled));$('symmetryToggle').textContent=symmetryEnabled?'Вимкнути вісь симетрії':'Увімкнути вісь симетрії';drawOverlay();toast(symmetryEnabled?'Симетричне малювання увімкнено':'Симетричне малювання вимкнено');});
+    $('copySelectionBtn').addEventListener('click',copySelection); $('cutSelectionBtn').addEventListener('click',cutSelection); $('pasteSelectionBtn').addEventListener('click',pasteSelection); $('deleteSelectionBtn').addEventListener('click',deleteSelection); $('clearSelectionBtn').addEventListener('click',clearSelection);
     $('viewRotateLeft').addEventListener('click',()=>{viewRotation-=15;updateSheetTransform();}); $('viewRotateRight').addEventListener('click',()=>{viewRotation+=15;updateSheetTransform();});
     $('viewReset').addEventListener('click',resetView); $('resetView').addEventListener('click',resetView); $('fitView').addEventListener('click',fitView);
     $('zoomIn').addEventListener('click',()=>{const r=stage.getBoundingClientRect();zoomAt(zoom*1.25,r.left+r.width/2,r.top+r.height/2);});
@@ -777,16 +1000,25 @@
     });
     stage.addEventListener('contextmenu', e => e.preventDefault());
     window.addEventListener('keydown',e=>{
-      if(e.code==='Space' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){spaceDown=true;e.preventDefault();}
+      const editing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+      if (editing && e.key !== 'Escape') return;
+      if(e.code==='Space' && !editing){spaceDown=true;e.preventDefault();}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();}
       else if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.shiftKey&&e.key.toLowerCase()==='z'))){e.preventDefault();redo();}
       else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();exportPNG();}
+      else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&tool==='select'){e.preventDefault();copySelection();}
+      else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='x'&&tool==='select'){e.preventDefault();cutSelection();}
+      else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&tool==='select'){e.preventDefault();pasteSelection();}
+      else if(e.key==='Escape'&&(selectionRect||floatingSelection||selectionDrag)){e.preventDefault();clearSelection();}
+      else if(e.key==='Delete'&&selectionRect&&tool==='select'){e.preventDefault();deleteSelection();}
       else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const key = e.key.toLowerCase();
         if (key === 'b') setTool('brush');
         if (key === 'e') setTool('eraser');
         if (key === 'i') setTool('eyedropper');
         if (key === 'g') setTool('fill');
+        if (key === 'm') setTool('select');
+        if (key === 't') setTool('text');
         if (key === '[') {
           brushSize.value = clamp(Number(brushSize.value) - 1, 1, 160);
           updateBrushControls(true);
@@ -805,7 +1037,8 @@
   function init() {
     layers=[makeLayer('Фон', '#ffffff', true),makeLayer('Шар 1')]; activeId=layers[1].id;
     preview.width=docW;preview.height=docH;preview.style.width=`${docW}px`;preview.style.height=`${docH}px`;
-    setColor(foregroundColor); updateBrushControls(); setBrush('pen'); setTool('brush');
+    overlay.width=docW;overlay.height=docH;overlay.style.width=`${docW}px`;overlay.style.height=`${docH}px`;
+    setColor(foregroundColor); loadRecentColors(); updateBrushControls(); setBrush('pen'); setTool('brush');
     renderLayers(); updateDimensions(); bindEvents();
     const resize = new ResizeObserver(()=>updateSheetTransform()); resize.observe(stage); updateSheetTransform();
     $('canvasStatus').textContent='Готово до малювання';
