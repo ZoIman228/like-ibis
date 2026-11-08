@@ -21,9 +21,9 @@
   const MAX_LAYERS = 100;
 
   // Keep this in sync with the Android app's Version name in HTML to APK Builder.
-  // The APK uploaded with this source is version 1.1 (versionCode 2).
-  // Set the first updater-enabled build to 1.1.1 / versionCode 3.
-  const PXL_APP_VERSION = '1.1.1';
+  // The previous updater-enabled APK is version 1.1.1 (versionCode 3).
+  // This build is 1.1.2 / versionCode 4.
+  const PXL_APP_VERSION = '1.1.2';
   const PXL_RELEASES_API = 'https://api.github.com/repos/ZoIman228/like-ibis/releases/latest';
   const PXL_APK_ASSET_NAME = 'PXL-Studio.apk';
   let pendingUpdateUrl = '';
@@ -1054,6 +1054,40 @@
     document.querySelectorAll('.panel-body').forEach(p=>p.classList.toggle('active',p.id===id));
   }
   function bindEvents() {
+    const brandMark = $('brandMark');
+    let brandClickCount = 0;
+    let brandLastClick = 0;
+
+    const registerBrandClick = () => {
+      const now = Date.now();
+      if (now - brandLastClick > 2000) brandClickCount = 0;
+      brandLastClick = now;
+      brandClickCount += 1;
+
+      if (brandClickCount >= 5) {
+        brandClickCount = 0;
+        const dialog = $('easterEggDialog');
+        if (dialog && typeof dialog.showModal === 'function' && !dialog.open) {
+          dialog.showModal();
+        }
+      }
+    };
+
+    brandMark.addEventListener('click', event => {
+      event.preventDefault();
+      registerBrandClick();
+    });
+
+    brandMark.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        brandMark.click();
+      }
+    });
+
+    $('easterEggCloseBtn').addEventListener('click', () => {
+      $('easterEggDialog').close();
+    });
     document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
     document.querySelectorAll('[data-brush]').forEach(b=>b.addEventListener('click',()=>setBrush(b.dataset.brush)));
     document.querySelectorAll('.inspector-tab').forEach(b=>b.addEventListener('click',()=>openPanel(b.dataset.panel)));

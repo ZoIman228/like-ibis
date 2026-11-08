@@ -12,7 +12,7 @@
 <div class="app-shell">
   <header class="topbar">
     <a class="brand" href="#" aria-label="PXL Studio">
-      <span class="brand-mark">P</span>
+      <span class="brand-mark" id="brandMark" role="button" tabindex="0" aria-label="Літера P — логотип PXL Studio">P</span>
       <span class="brand-copy"><strong>PXL Studio</strong><small>creative canvas</small></span>
     </a>
     <div class="document-title"><span class="status-dot"></span><span id="documentStatus">Нова робота</span></div>
@@ -159,6 +159,17 @@
       <div class="dialog-actions">
         <button class="top-button subtle" id="updateLaterBtn" type="button">Пізніше</button>
         <button class="top-button primary" id="updateDownloadBtn" type="button">Завантажити</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="easterEggDialog" class="app-dialog easter-egg-dialog" aria-labelledby="easterEggTitle">
+    <div class="easter-egg-content">
+      <div class="easter-egg-mark" aria-hidden="true">P</div>
+      <div class="easter-egg-kicker">SECRET FOUND · 05/05</div>
+      <h3 id="easterEggTitle">Ти знайшов пасхалку! 🗿</h3>
+      <p>П’ять натискань на логотип — і ти тут. Тепер ти офіційно знаєш занадто багато.</p>
+      <div class="dialog-actions">
+        <button class="top-button primary" id="easterEggCloseBtn" type="button">Повернутися до малювання</button>
       </div>
     </div>
   </dialog>

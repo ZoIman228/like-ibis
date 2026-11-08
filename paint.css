@@ -1613,3 +1613,68 @@ button:disabled {
         font-size: 16px;
     }
 }
+
+
+/* Hidden PXL Studio easter egg */
+.brand-mark[role="button"] {
+    cursor: pointer;
+    user-select: none;
+    transition: transform .15s ease, filter .15s ease;
+}
+
+.brand-mark[role="button"]:active {
+    transform: scale(.92);
+    filter: brightness(1.15);
+}
+
+.brand-mark[role="button"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+.easter-egg-dialog {
+    width: min(390px, calc(100vw - 28px));
+}
+
+.easter-egg-content {
+    padding: 24px;
+    text-align: center;
+}
+
+.easter-egg-mark {
+    display: grid;
+    place-items: center;
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 13px;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #a79aff, #6651e5);
+    color: #fff;
+    font-size: 31px;
+    font-weight: 900;
+    box-shadow: 0 5px 22px #806cff55;
+}
+
+.easter-egg-kicker {
+    margin-bottom: 9px;
+    color: #c8beff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+}
+
+.easter-egg-dialog h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+}
+
+.easter-egg-dialog p {
+    color: #aaaaba;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.easter-egg-dialog .dialog-actions {
+    justify-content: center;
+    margin-top: 19px;
+}
