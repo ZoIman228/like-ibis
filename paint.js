@@ -18,8 +18,7 @@
   const brushOpacity = $('brushOpacity');
   const brushHardness = $('brushHardness');
   const MAX_HISTORY = 18;
-  const MAX_LAYERS = 24;
-  const MAX_TOTAL_PIXELS = 36_000_000;
+  const MAX_LAYERS = 100;
   const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
   const rad = (d) => d * Math.PI / 180;
   const cloneCanvas = (source) => {
@@ -173,7 +172,6 @@
   function selectLayer(id) { activeId = id; renderLayers(); }
   function addLayer(name = `Шар ${layers.length + 1}`, source = null) {
     if (layers.length >= MAX_LAYERS) return toast(`Максимум ${MAX_LAYERS} шарів`);
-    if (docW * docH * (layers.length + 1) > MAX_TOTAL_PIXELS) return toast('Для цього розміру полотна вже забагато шарів');
     record(); const layer = makeLayer(name);
     if (source) layerCtx(layer).drawImage(source, 0, 0, docW, docH);
     const idx = layers.findIndex(l => l.id === activeId);
@@ -181,7 +179,6 @@
   }
   function duplicateLayer() {
     const current = activeLayer(); if (!current || layers.length >= MAX_LAYERS) return;
-    if (docW * docH * (layers.length + 1) > MAX_TOTAL_PIXELS) return toast('Для цього розміру полотна вже забагато шарів');
     record(); const copy = makeLayer(`${current.name} копія`); layerCtx(copy).drawImage(current.canvas, 0, 0);
     const idx = layers.findIndex(l => l.id === current.id); layers.splice(idx + 1, 0, copy); activeId = copy.id; isDirty = true; artworkChanged = true; renderLayers(); toast('Шар дубльовано');
   }
@@ -683,7 +680,6 @@
   function setCanvasSize(width, height, scaleArtwork = false) {
     width = Math.round(clamp(Number(width) || 0, 64, 4096)); height = Math.round(clamp(Number(height) || 0, 64, 4096));
     if (width === docW && height === docH) return;
-    if (width * height * layers.length > MAX_TOTAL_PIXELS) return toast('Завелике полотно для поточної кількості шарів. Видали кілька шарів або зменш розмір.');
     record('all'); const oldW = docW, oldH = docH; docW = width; docH = height;
     layers.forEach(layer => {
       const old = layer.canvas, next = document.createElement('canvas');
@@ -738,7 +734,6 @@
     try {
       const data = JSON.parse(await file.text()); if (!data || data.app !== 'PXL Studio' || !Array.isArray(data.layers) || !data.layers.length) throw new Error('Невідомий формат');
       docW = clamp(Number(data.width)||1200,64,4096); docH = clamp(Number(data.height)||900,64,4096);
-      if (docW * docH * Math.min(data.layers.length, MAX_LAYERS) > MAX_TOTAL_PIXELS) throw new Error('Проєкт завеликий для безпечного відкриття в браузері');
       layers = [];
       for (const [index, item] of data.layers.slice(0,MAX_LAYERS).entries()) {
         const image = new Image(); image.src = item.image; await image.decode();
@@ -763,7 +758,7 @@
   }
   async function importImage(file) {
     const url = URL.createObjectURL(file); const image = new Image();
-    image.onload = () => { if(layers.length>=MAX_LAYERS || docW*docH*(layers.length+1)>MAX_TOTAL_PIXELS){URL.revokeObjectURL(url);return toast('Для цього розміру полотна вже забагато шарів');} record(); const layer = makeLayer(file.name.replace(/\.[^.]+$/,'') || 'Імпорт'); const scale = Math.min(docW/image.width,docH/image.height,1); const w=image.width*scale,h=image.height*scale; layerCtx(layer).drawImage(image,(docW-w)/2,(docH-h)/2,w,h); layers.push(layer); activeId=layer.id; artworkChanged=true; isDirty=true; renderLayers();URL.revokeObjectURL(url); toast('Зображення додано окремим шаром'); };
+    image.onload = () => { if(layers.length>=MAX_LAYERS){URL.revokeObjectURL(url);return toast(`Максимум ${MAX_LAYERS} шарів`);} record(); const layer = makeLayer(file.name.replace(/\.[^.]+$/,'') || 'Імпорт'); const scale = Math.min(docW/image.width,docH/image.height,1); const w=image.width*scale,h=image.height*scale; layerCtx(layer).drawImage(image,(docW-w)/2,(docH-h)/2,w,h); layers.push(layer); activeId=layer.id; artworkChanged=true; isDirty=true; renderLayers();URL.revokeObjectURL(url); toast('Зображення додано окремим шаром'); };
     image.onerror = () => { URL.revokeObjectURL(url); toast('Не вдалося відкрити зображення'); }; image.src=url;
   }
 
