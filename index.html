@@ -74,7 +74,7 @@
         <button class="inspector-tab" data-panel="canvasPanel">Полотно</button>
       </div>
       <section class="panel-body active" id="brushPanel">
-        <div class="panel-heading"><div><b>Набір пензлів</b><small>Обери характер свого штриха</small></div><span class="panel-count">14</span></div>
+        <div class="panel-heading"><div><b>Набір пензлів</b><small>Обери характер свого штриха</small></div><span class="panel-count">24</span></div>
         <div class="brush-grid">
           <button class="brush-preset selected" data-brush="pen"><span class="brush-preview pen"></span><b>Dip Pen</b><small>Чіткий контур</small></button>
           <button class="brush-preset" data-brush="pencil"><span class="brush-preview pencil"></span><b>Pencil</b><small>Олівцевий</small></button>
@@ -90,12 +90,16 @@
           <button class="brush-preset" data-brush="glow"><span class="brush-preview glow"></span><b>Glow</b><small>Світіння</small></button>
           <button class="brush-preset" data-brush="crayon"><span class="brush-preview crayon"></span><b>Crayon</b><small>Восковий</small></button>
           <button class="brush-preset" data-brush="texture"><span class="brush-preview texture"></span><b>Texture</b><small>Текстурний</small></button>
-        </div>
-        <div class="control-block text-options">
-          <div class="control-title"><label for="textSize">Параметри тексту</label><output id="textSizeOut">48 px</output></div>
-          <input id="textSize" type="range" min="8" max="240" value="48">
-          <div class="text-option-row"><select id="textFont" aria-label="Шрифт тексту"><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Verdana">Verdana</option><option value="monospace">Monospace</option><option value="cursive">Cursive</option></select><label class="check-option"><input id="textBold" type="checkbox"> Жирний</label></div>
-          <small>Обери інструмент «Текст» і торкнись полотна</small>
+          <button class="brush-preset" data-brush="mapping"><span class="brush-preview mapping"></span><b>Mapping</b><small>Тонкий контур</small></button>
+          <button class="brush-preset" data-brush="fountain"><span class="brush-preview fountain"></span><b>Fountain</b><small>Перо з тиском</small></button>
+          <button class="brush-preset" data-brush="sumi"><span class="brush-preview sumi"></span><b>Sumi</b><small>Суха туш</small></button>
+          <button class="brush-preset" data-brush="felt"><span class="brush-preview felt"></span><b>Felt Tip</b><small>Фетровий маркер</small></button>
+          <button class="brush-preset" data-brush="spray"><span class="brush-preview spray"></span><b>Spray</b><small>Аерозоль</small></button>
+          <button class="brush-preset" data-brush="wash"><span class="brush-preview wash"></span><b>Wash</b><small>Рідка заливка</small></button>
+          <button class="brush-preset" data-brush="pastel"><span class="brush-preview pastel"></span><b>Pastel</b><small>Сухий пастель</small></button>
+          <button class="brush-preset" data-brush="stippling"><span class="brush-preview stippling"></span><b>Stipple</b><small>Точковий</small></button>
+          <button class="brush-preset" data-brush="oil"><span class="brush-preview oil"></span><b>Oil</b><small>Олійна фарба</small></button>
+          <button class="brush-preset" data-brush="ribbon"><span class="brush-preview ribbon"></span><b>Ribbon</b><small>Стрічковий</small></button>
         </div>
         <div class="control-block"><div class="control-title"><label for="brushSize">Розмір</label><output id="brushSizeOut">6 px</output></div><input id="brushSize" type="range" min="1" max="160" value="6"></div>
         <div class="control-block"><div class="control-title"><label for="brushOpacity">Непрозорість</label><output id="brushOpacityOut">100%</output></div><input id="brushOpacity" type="range" min="1" max="100" value="100"></div>
@@ -148,7 +152,58 @@
   </main>
   <div class="mobile-status"><span id="mobileToolName">Пензель</span><span id="mobileZoom">100%</span><span id="mobileCanvasSize">1200 × 900</span></div>
   <dialog id="confirmDialog" class="app-dialog"><form method="dialog"><h3 id="dialogTitle">Підтвердження</h3><p id="dialogText">Продовжити?</p><div class="dialog-actions"><button class="top-button subtle" value="cancel">Скасувати</button><button class="top-button primary" id="dialogConfirm" value="ok">Підтвердити</button></div></form></dialog>
-  <dialog id="textDialog" class="app-dialog text-dialog"><div class="text-dialog-content"><h3>Додати текст</h3><textarea id="textContent" rows="5" maxlength="2000" placeholder="Введи свій текст..."></textarea><div class="dialog-actions"><button class="top-button subtle" id="textCancelBtn" type="button">Скасувати</button><button class="top-button primary" id="textInsertBtn" type="button">Додати на полотно</button></div></div></dialog>
+  <dialog id="textDialog" class="app-dialog text-dialog" aria-labelledby="textDialogTitle">
+    <div class="text-dialog-content">
+      <div class="text-dialog-heading"><div><div class="text-dialog-kicker">TEXT TOOL</div><h3 id="textDialogTitle">Додати текст</h3></div><span class="text-dialog-hint">Ctrl + Enter · вставити</span></div>
+      <label class="text-field-label" for="textContent">Вміст</label>
+      <textarea id="textContent" rows="4" maxlength="2000" placeholder="Введи свій текст..." spellcheck="true"></textarea>
+      <div class="text-control-grid">
+        <label class="text-control text-control-wide">Шрифт
+          <select id="textFont">
+            <option value="Arial">Arial</option><option value="Verdana">Verdana</option><option value="Tahoma">Tahoma</option>
+            <option value="Trebuchet MS">Trebuchet MS</option><option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option><option value="Garamond">Garamond</option>
+            <option value="Courier New">Courier New</option><option value="Impact">Impact</option>
+            <option value="Comic Sans MS">Comic Sans MS</option>
+          </select>
+        </label>
+        <label class="text-control">Розмір <output id="textSizeOut">48 px</output>
+          <input id="textSize" type="range" min="8" max="240" value="48">
+        </label>
+        <label class="text-control">Вирівнювання
+          <select id="textAlign"><option value="left">Ліворуч</option><option value="center">По центру</option><option value="right">Праворуч</option></select>
+        </label>
+        <label class="text-control">Міжряддя <output id="textLineHeightOut">125%</output>
+          <input id="textLineHeight" type="range" min="90" max="220" value="125">
+        </label>
+        <label class="text-control">Інтервал літер <output id="textLetterSpacingOut">0 px</output>
+          <input id="textLetterSpacing" type="range" min="-3" max="24" step="1" value="0">
+        </label>
+        <label class="text-control">Ширина блока <output id="textMaxWidthOut">1000 px</output>
+          <input id="textMaxWidth" type="range" min="100" max="4000" step="50" value="1000">
+        </label>
+      </div>
+      <div class="text-style-row">
+        <label class="text-check"><input id="textBold" type="checkbox"> Жирний</label>
+        <label class="text-check"><input id="textItalic" type="checkbox"> Курсив</label>
+        <label class="text-check"><input id="textUnderline" type="checkbox"> Підкреслення</label>
+      </div>
+      <details class="text-effects">
+        <summary>Ефекти тексту</summary>
+        <div class="text-effects-grid">
+          <label class="text-check"><input id="textOutline" type="checkbox"> Обводка</label>
+          <label class="text-control">Колір обводки <input id="textOutlineColor" type="color" value="#ffffff"></label>
+          <label class="text-control">Товщина <output id="textOutlineWidthOut">3 px</output><input id="textOutlineWidth" type="range" min="1" max="20" value="3"></label>
+          <label class="text-check"><input id="textShadow" type="checkbox"> Тінь</label>
+          <label class="text-control">Розмиття тіні <output id="textShadowBlurOut">10 px</output><input id="textShadowBlur" type="range" min="0" max="40" value="10"></label>
+          <label class="text-check"><input id="textBackground" type="checkbox"> Підкладка</label>
+          <label class="text-control">Колір підкладки <input id="textBackgroundColor" type="color" value="#fff2a8"></label>
+        </div>
+      </details>
+      <div class="text-preview-wrap"><div class="text-preview-label">ПОПЕРЕДНІЙ ПЕРЕГЛЯД</div><div id="textLivePreview" class="text-live-preview">Твій текст</div></div>
+      <div class="dialog-actions"><button class="top-button subtle" id="textCancelBtn" type="button">Скасувати</button><button class="top-button primary" id="textInsertBtn" type="button">Додати на полотно</button></div>
+    </div>
+  </dialog>
   <dialog id="updateDialog" class="app-dialog update-dialog" aria-labelledby="updateDialogTitle">
     <div class="update-dialog-content">
       <div class="update-kicker">PXL STUDIO · ОНОВЛЕННЯ</div>

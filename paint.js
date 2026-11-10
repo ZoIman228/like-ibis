@@ -22,8 +22,8 @@
 
   // Keep this in sync with the Android app's Version name in HTML to APK Builder.
   // The previous updater-enabled APK is version 1.1.1 (versionCode 3).
-  // This build is 1.1.2 / versionCode 4.
-  const PXL_APP_VERSION = '1.1.2';
+  // This build is 1.2.0 / versionCode 5.
+  const PXL_APP_VERSION = '1.2.0';
   const PXL_RELEASES_API = 'https://api.github.com/repos/ZoIman228/like-ibis/releases/latest';
   const PXL_APK_ASSET_NAME = 'PXL-Studio.apk';
   let pendingUpdateUrl = '';
@@ -63,7 +63,7 @@
   let foregroundColor = '#6757e8';
 
   const toolNames = { brush: 'Пензель', eraser: 'Гумка', eyedropper: 'Піпетка', fill: 'Заливка', line: 'Лінія', rect: 'Прямокутник', ellipse: 'Еліпс', select: 'Виділення', text: 'Текст' };
-  const brushNames = { pen: 'Dip Pen', pencil: 'Pencil', marker: 'Marker', airbrush: 'Airbrush', watercolor: 'Watercolor', calligraphy: 'Calligraphy', pixel: 'Pixel', soft: 'Soft', chalk: 'Chalk', ink: 'Ink', flat: 'Flat', glow: 'Glow', crayon: 'Crayon', texture: 'Texture' };
+  const brushNames = { pen: 'Dip Pen', pencil: 'Pencil', marker: 'Marker', airbrush: 'Airbrush', watercolor: 'Watercolor', calligraphy: 'Calligraphy', pixel: 'Pixel', soft: 'Soft', chalk: 'Chalk', ink: 'Ink', flat: 'Flat', glow: 'Glow', crayon: 'Crayon', texture: 'Texture', mapping: 'Mapping Pen', fountain: 'Fountain Pen', sumi: 'Sumi Brush', felt: 'Felt Tip', spray: 'Spray', wash: 'Wash', pastel: 'Pastel', stippling: 'Stipple', oil: 'Oil Paint', ribbon: 'Ribbon Brush' };
   const colorNames = { '#171923':'Графіт', '#ffffff':'Білий', '#ef476f':'Рожевий', '#ff8c42':'Помаранчевий', '#ffd166':'Жовтий', '#06d6a0':'М’ятний', '#00b4d8':'Блакитний', '#4d96ff':'Синій', '#6757e8':'Фіолетовий', '#b565d9':'Лавандовий', '#c77d4a':'Коричневий', '#8d99ae':'Сірий' };
 
   function toast(message) {
@@ -332,7 +332,7 @@
       watercolor: 1.5,
       calligraphy: .38,
       pixel: Math.max(2, size * .6) / size,
-      soft: 1.25
+      soft: 1.25, mapping: .58, fountain: .9, sumi: 2.1, felt: 1.7, spray: 1.9, wash: 2.4, pastel: 1.5, stippling: 1.25, oil: 1.55, ribbon: 1.2
     };
     return size * (multipliers[brush] || 1);
   }
@@ -472,6 +472,8 @@
     if (brush === 'marker') return .36;
     if (brush === 'watercolor') return .28;
     if (brush === 'soft') return .52;
+    if (brush === 'spray' || brush === 'wash' || brush === 'pastel' || brush === 'stippling') return .48;
+    if (brush === 'sumi' || brush === 'oil') return .82;
     return 1;
   }
   function updatePreviewOpacity() {
@@ -494,6 +496,99 @@
       const step = Math.max(2, size * .6), count = Math.max(1, Math.ceil(distance / step));
       pctx.save(); pctx.fillStyle = color; pctx.globalAlpha = 1;
       for (let i = 0; i <= count; i++) { const t = i / count, x = from.x + (to.x-from.x)*t, y = from.y + (to.y-from.y)*t; pctx.fillRect(Math.round(x/step)*step, Math.round(y/step)*step, step, step); }
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'mapping' || brush === 'fountain' || brush === 'felt') {
+      const pressureWidth = brush === 'mapping'
+        ? Math.max(.45, size * (.18 + pressure * .52))
+        : brush === 'fountain' ? Math.max(.8, size * (.32 + pressure * .9)) : size * 1.7;
+      pctx.save(); pctx.strokeStyle = color; pctx.fillStyle = color;
+      pctx.globalAlpha = brush === 'felt' ? .72 : 1;
+      pctx.lineWidth = pressureWidth; pctx.lineCap = brush === 'felt' ? 'square' : 'round'; pctx.lineJoin = 'round';
+      pctx.beginPath(); pctx.moveTo(from.x, from.y); pctx.lineTo(to.x, to.y); pctx.stroke();
+      if (brush === 'fountain' && pressure > .72) {
+        pctx.globalAlpha = .18; pctx.lineWidth = pressureWidth * 1.9;
+        pctx.beginPath(); pctx.moveTo(from.x, from.y); pctx.lineTo(to.x, to.y); pctx.stroke();
+      }
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'ribbon') {
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const length = Math.max(.001, Math.hypot(dx, dy));
+      const nx = -dy / length, ny = dx / length;
+      const half = size * (.35 + pressure * .55);
+      pctx.save(); pctx.fillStyle = color; pctx.globalAlpha = .92;
+      pctx.beginPath(); pctx.moveTo(from.x + nx * half, from.y + ny * half);
+      pctx.lineTo(to.x + nx * half, to.y + ny * half);
+      pctx.lineTo(to.x - nx * half, to.y - ny * half);
+      pctx.lineTo(from.x - nx * half, from.y - ny * half); pctx.closePath(); pctx.fill();
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'wash') {
+      pctx.save(); pctx.strokeStyle = color; pctx.lineWidth = size * 2.4;
+      pctx.lineCap = 'round'; pctx.lineJoin = 'round'; pctx.globalAlpha = .24;
+      pctx.shadowColor = color; pctx.shadowBlur = size * (.45 + (1 - Number(brushHardness.value) / 100) * 1.1);
+      pctx.beginPath(); pctx.moveTo(from.x, from.y); pctx.lineTo(to.x, to.y); pctx.stroke();
+      pctx.shadowBlur = 0; pctx.globalAlpha = .12; pctx.lineWidth = size * 1.1;
+      pctx.beginPath(); pctx.moveTo(from.x + .7, from.y - .4); pctx.lineTo(to.x + .7, to.y - .4); pctx.stroke();
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'oil') {
+      const step = Math.max(2, size * .24), count = Math.max(1, Math.ceil(distance / step));
+      pctx.save(); pctx.strokeStyle = color; pctx.lineCap = 'round';
+      for (let i = 0; i <= count; i++) {
+        const t = i / count, cx = from.x + (to.x - from.x) * t, cy = from.y + (to.y - from.y) * t;
+        for (let j = 0; j < 7; j++) {
+          const seed = Math.floor(cx * 9 + cy * 13 + i * 37 + j * 91);
+          const offset = (deterministicNoise(seed) - .5) * size * .8;
+          pctx.globalAlpha = .16 + deterministicNoise(seed + 7) * .18;
+          pctx.lineWidth = Math.max(.5, size * (.035 + deterministicNoise(seed + 15) * .065));
+          pctx.beginPath(); pctx.moveTo(cx + offset, cy - size * .22); pctx.lineTo(cx + offset + .8, cy + size * .22); pctx.stroke();
+        }
+      }
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'sumi') {
+      pctx.save(); pctx.strokeStyle = color; pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+      pctx.globalAlpha = .82; pctx.lineWidth = size * (1.2 + pressure * .9);
+      pctx.beginPath(); pctx.moveTo(from.x, from.y); pctx.lineTo(to.x, to.y); pctx.stroke();
+      const count = Math.max(1, Math.ceil(distance / Math.max(2, size * .14)));
+      for (let i = 0; i <= count; i++) {
+        const t = i / count, cx = from.x + (to.x-from.x)*t, cy = from.y + (to.y-from.y)*t;
+        for (let j = 0; j < 8; j++) {
+          const seed = Math.floor(cx * 11 + cy * 17 + i * 29 + j * 73);
+          const a = deterministicNoise(seed) * Math.PI * 2;
+          const r = size * (.25 + deterministicNoise(seed + 1) * .75);
+          pctx.globalAlpha = .08 + deterministicNoise(seed + 2) * .16;
+          pctx.fillStyle = deterministicNoise(seed + 3) > .5 ? '#ffffff' : '#000000';
+          pctx.beginPath(); pctx.arc(cx + Math.cos(a)*r, cy + Math.sin(a)*r, Math.max(.4,size*.025), 0, Math.PI*2); pctx.fill();
+        }
+      }
+      pctx.restore(); updatePreviewOpacity(); return;
+    }
+    if (brush === 'spray' || brush === 'stippling' || brush === 'pastel') {
+      const step = Math.max(2, size * (brush === 'spray' ? .12 : .18));
+      const count = Math.max(1, Math.ceil(distance / step));
+      const dots = brush === 'spray' ? clamp(Math.round(size * .55), 18, 70) : brush === 'stippling' ? 34 : 24;
+      pctx.save(); pctx.fillStyle = color;
+      for (let i = 0; i <= count; i++) {
+        const t = i / count, cx = from.x + (to.x-from.x)*t, cy = from.y + (to.y-from.y)*t;
+        for (let j = 0; j < dots; j++) {
+          const seed = Math.floor(cx * 13 + cy * 17 + i * 41 + j * 67);
+          const angle = deterministicNoise(seed) * Math.PI * 2;
+          const spread = brush === 'spray' ? 1 : brush === 'pastel' ? .72 : .5;
+          const radius = Math.sqrt(deterministicNoise(seed + 11)) * size * spread;
+          const dot = brush === 'spray' ? Math.max(.35, size * (.008 + deterministicNoise(seed + 29) * .022))
+            : brush === 'stippling' ? Math.max(.7, size * (.025 + deterministicNoise(seed + 29) * .07))
+            : Math.max(.5, size * (.025 + deterministicNoise(seed + 29) * .07));
+          pctx.globalAlpha = brush === 'spray' ? .12 : brush === 'stippling' ? .34 : .3;
+          pctx.beginPath(); pctx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, dot, 0, Math.PI * 2); pctx.fill();
+        }
+      }
+      if (brush === 'pastel') {
+        pctx.globalAlpha = .14; pctx.strokeStyle = color; pctx.lineWidth = size * .55; pctx.lineCap = 'round';
+        pctx.beginPath(); pctx.moveTo(from.x, from.y); pctx.lineTo(to.x, to.y); pctx.stroke();
+      }
       pctx.restore(); updatePreviewOpacity(); return;
     }
     if (brush === 'chalk' || brush === 'crayon' || brush === 'texture') {
@@ -622,23 +717,142 @@
     renderLayers(); updateHistoryButtons(); if (commit) updateStatus('Малюнок оновлено');
   }
 
+  function textSettings() {
+    return {
+      size: Number($('textSize').value) || 48,
+      font: $('textFont').value || 'Arial',
+      bold: $('textBold').checked,
+      italic: $('textItalic').checked,
+      underline: $('textUnderline').checked,
+      align: $('textAlign').value || 'left',
+      lineHeight: Number($('textLineHeight').value) / 100 || 1.25,
+      letterSpacing: Number($('textLetterSpacing').value) || 0,
+      maxWidth: Number($('textMaxWidth').value) || docW,
+      outline: $('textOutline').checked,
+      outlineColor: $('textOutlineColor').value || '#ffffff',
+      outlineWidth: Number($('textOutlineWidth').value) || 3,
+      shadow: $('textShadow').checked,
+      shadowBlur: Number($('textShadowBlur').value) || 0,
+      background: $('textBackground').checked,
+      backgroundColor: $('textBackgroundColor').value || '#fff2a8'
+    };
+  }
+  function updateTextPreview() {
+    const previewEl = $('textLivePreview');
+    if (!previewEl) return;
+    const s = textSettings();
+    const content = $('textContent').value || 'Твій текст';
+    previewEl.textContent = content;
+    previewEl.style.fontFamily = `"${s.font}", sans-serif`;
+    previewEl.style.fontSize = `${Math.min(s.size, 42)}px`;
+    previewEl.style.fontWeight = s.bold ? '700' : '400';
+    previewEl.style.fontStyle = s.italic ? 'italic' : 'normal';
+    previewEl.style.textAlign = s.align;
+    previewEl.style.lineHeight = String(s.lineHeight);
+    previewEl.style.letterSpacing = `${s.letterSpacing * Math.min(s.size, 42) / Math.max(s.size, 1)}px`;
+    previewEl.style.webkitTextStroke = s.outline ? `${Math.max(.5, s.outlineWidth * .35)}px ${s.outlineColor}` : '0 transparent';
+    previewEl.style.textShadow = s.shadow ? `0 2px ${Math.max(1, s.shadowBlur * .35)}px #0009` : 'none';
+    previewEl.style.textDecoration = s.underline ? 'underline' : 'none';
+    previewEl.style.background = s.background ? s.backgroundColor : 'transparent';
+  }
   function openTextDialog(point) {
     pendingTextPoint = point;
     $('textContent').value = '';
+    updateTextPreview();
     $('textDialog').showModal();
     $('textContent').focus();
+  }
+  function measureSpacedText(ctx, text, spacing) {
+    if (!text) return 0;
+    let width = 0;
+    for (const character of Array.from(text)) width += ctx.measureText(character).width;
+    return width + Math.max(0, Array.from(text).length - 1) * spacing;
+  }
+  function drawSpacedText(ctx, text, x, y, spacing, stroke = false) {
+    if (spacing === 0) {
+      if (stroke) ctx.strokeText(text, x, y);
+      else ctx.fillText(text, x, y);
+      return;
+    }
+    let cursor = x;
+    for (const character of Array.from(text)) {
+      if (stroke) ctx.strokeText(character, cursor, y);
+      else ctx.fillText(character, cursor, y);
+      cursor += ctx.measureText(character).width + spacing;
+    }
+  }
+  function wrapTextLine(ctx, text, maxWidth, spacing) {
+    if (!text) return [''];
+    const words = text.split(/\s+/);
+    const lines = [];
+    let line = '';
+    const pushLongWord = (word) => {
+      let chunk = '';
+      for (const char of Array.from(word)) {
+        const candidate = chunk + char;
+        if (chunk && measureSpacedText(ctx, candidate, spacing) > maxWidth) {
+          lines.push(chunk); chunk = char;
+        } else chunk = candidate;
+      }
+      return chunk;
+    };
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (!line || measureSpacedText(ctx, candidate, spacing) <= maxWidth) {
+        if (measureSpacedText(ctx, candidate, spacing) <= maxWidth) line = candidate;
+        else line = pushLongWord(word);
+      } else {
+        lines.push(line);
+        line = measureSpacedText(ctx, word, spacing) <= maxWidth ? word : pushLongWord(word);
+      }
+    }
+    lines.push(line);
+    return lines;
   }
   function insertTextAt(point, value) {
     const layer = activeLayer();
     if (!layer || layer.locked || !layer.visible) return toast('Активний шар заблокований або прихований');
     if (!value || !value.trim()) return toast('Введи текст перед додаванням');
     record('layer', layer.id);
-    const ctx = layerCtx(layer), size = Number($('textSize').value) || 48;
-    const font = $('textFont').value.trim() || 'Arial';
-    ctx.save(); ctx.fillStyle = foregroundColor; ctx.textBaseline = 'top';
-    ctx.font = `${$('textBold').checked ? '700 ' : ''}${size}px ${font}`;
-    const lineHeight = size * 1.25;
-    value.slice(0, 2000).split('\n').slice(0, 50).forEach((line, index) => ctx.fillText(line.slice(0, 300), point.x, point.y + index * lineHeight, Math.max(1, docW - point.x)));
+    const ctx = layerCtx(layer), s = textSettings();
+    const family = s.font.includes(' ') ? `"${s.font}"` : s.font;
+    const style = s.italic ? 'italic ' : '';
+    ctx.save();
+    ctx.font = `${style}${s.bold ? '700 ' : '400 '}${s.size}px ${family}`;
+    ctx.textBaseline = 'top'; ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+    const availableWidth = Math.max(s.size, Math.min(s.maxWidth, docW - point.x));
+    const paragraphs = value.slice(0, 2000).replace(/\r/g, '').split('\n');
+    const lines = paragraphs.flatMap(paragraph => wrapTextLine(ctx, paragraph.slice(0, 500), availableWidth, s.letterSpacing));
+    const lineHeight = s.size * s.lineHeight;
+    const padding = Math.max(3, s.size * .18);
+    lines.slice(0, 100).forEach((line, index) => {
+      const y = point.y + index * lineHeight;
+      const width = measureSpacedText(ctx, line, s.letterSpacing);
+      let x = point.x;
+      if (s.align === 'center') x += (availableWidth - width) / 2;
+      else if (s.align === 'right') x += availableWidth - width;
+      if (s.background && line.trim()) {
+        ctx.fillStyle = s.backgroundColor;
+        ctx.fillRect(x - padding, y - padding * .55, width + padding * 2, s.size + padding * 1.3);
+      }
+      if (s.shadow) {
+        ctx.shadowColor = 'rgba(0,0,0,.48)'; ctx.shadowBlur = s.shadowBlur;
+        ctx.shadowOffsetX = Math.max(1, s.shadowBlur * .18); ctx.shadowOffsetY = Math.max(1, s.shadowBlur * .22);
+      } else {
+        ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+      }
+      if (s.outline) {
+        ctx.strokeStyle = s.outlineColor; ctx.lineWidth = s.outlineWidth * 2;
+        drawSpacedText(ctx, line, x, y, s.letterSpacing, true);
+      }
+      ctx.fillStyle = foregroundColor;
+      drawSpacedText(ctx, line, x, y, s.letterSpacing, false);
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+      if (s.underline && line.trim()) {
+        ctx.strokeStyle = foregroundColor; ctx.lineWidth = Math.max(1, s.size / 18);
+        ctx.beginPath(); ctx.moveTo(x, y + s.size * 1.08); ctx.lineTo(x + width, y + s.size * 1.08); ctx.stroke();
+      }
+    });
     ctx.restore(); artworkChanged = true; isDirty = true; renderLayers(); updateStatus('Текст додано'); toast('Текст додано до активного шару');
   }
   function normalizedRect(a, b) {
@@ -1094,10 +1308,22 @@
     document.querySelectorAll('[data-color]').forEach(b=>b.addEventListener('click',()=>setColor(b.dataset.color)));
     colorInput.addEventListener('input',()=>setColor(colorInput.value));
     $('clearRecentColors').addEventListener('click',()=>{recentColors=[];try{localStorage.removeItem('pxlStudio.recentColors');}catch(_){}renderRecentColors();toast('Історію кольорів очищено');});
-    $('textSize').addEventListener('input',()=>{$('textSizeOut').textContent=`${$('textSize').value} px`;});
+    const textControlIds = ['textContent','textSize','textFont','textBold','textItalic','textUnderline','textAlign','textLineHeight','textLetterSpacing','textMaxWidth','textOutline','textOutlineColor','textOutlineWidth','textShadow','textShadowBlur','textBackground','textBackgroundColor'];
+    const refreshTextControls = () => {
+      $('textSizeOut').textContent = `${$('textSize').value} px`;
+      $('textLineHeightOut').textContent = `${$('textLineHeight').value}%`;
+      $('textLetterSpacingOut').textContent = `${$('textLetterSpacing').value} px`;
+      $('textMaxWidthOut').textContent = `${$('textMaxWidth').value} px`;
+      $('textOutlineWidthOut').textContent = `${$('textOutlineWidth').value} px`;
+      $('textShadowBlurOut').textContent = `${$('textShadowBlur').value} px`;
+      updateTextPreview();
+    };
+    textControlIds.forEach(id => { const control = $(id); if (control) control.addEventListener('input', refreshTextControls); });
     $('textCancelBtn').addEventListener('click',()=>{$('textDialog').close();pendingTextPoint=null;});
     $('textInsertBtn').addEventListener('click',()=>{const point=pendingTextPoint,value=$('textContent').value;$('textDialog').close();pendingTextPoint=null;if(point)insertTextAt(point,value);});
     $('textContent').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('textInsertBtn').click();}});
+    $('textDialog').addEventListener('click', event => { if (event.target === $('textDialog')) { $('textDialog').close(); pendingTextPoint = null; } });
+    refreshTextControls();
     $('updateLaterBtn').addEventListener('click',()=>{if($('updateDialog').open)$('updateDialog').close();});
     $('updateDownloadBtn').addEventListener('click',openUpdateDownload);
     $('swapColors').addEventListener('click',()=>{const a=foregroundColor;setColor(backgroundColor);backgroundColor=a;});
