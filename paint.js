@@ -23,7 +23,7 @@
   // Keep this in sync with the Android app's Version name in HTML to APK Builder.
   // The previous updater-enabled APK is version 1.1.1 (versionCode 3).
   // This build is 1.2.0 / versionCode 5.
-  const PXL_APP_VERSION = '1.2.0';
+  const PXL_APP_VERSION = '1.2.1';
   const PXL_RELEASES_API = 'https://api.github.com/repos/ZoIman228/like-ibis/releases/latest';
   const PXL_APK_ASSET_NAME = 'PXL-Studio.apk';
   let pendingUpdateUrl = '';
