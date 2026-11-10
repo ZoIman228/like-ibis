@@ -1792,3 +1792,12 @@ body { background: #111214; color: #e7e8eb; }
   .text-control-grid, .text-effects-grid { grid-template-columns:1fr; }
   .text-control-wide { grid-column:auto; }
 }
+
+/* Android/mobile layout fix: keep the workspace in one column.
+   This must come AFTER the desktop visual-refresh rules above, which
+   otherwise overwrite the earlier mobile grid-template-columns rule. */
+@media (max-width: 760px) {
+    .workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
